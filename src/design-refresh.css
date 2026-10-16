@@ -1,0 +1,150 @@
+/* Mobile readability and denser overview cards. No data or calculation changes. */
+:root { --muted: #6e655f; }
+input, select, textarea { font-size: 16px; }
+.field > span { font-size: 14px; color: #5e5550; }
+.hint { font-size: 13px; color: #6e655f; }
+.page-heading p { font-size: 15px; }
+.collection-heading > div > span, .archive-filter { font-size: 13px; }
+.toolbar input, .toolbar > select { font-size: 14px; }
+.badge { font-size: 12px; line-height: 1.5; padding: 4px 9px; }
+.badge.good { color: #465d36; background: #e9efdf; }
+.badge.warn { color: #83501e; background: #f8ead5; }
+.badge.neutral { color: #665c53; background: #eee9e0; }
+.recipe-card { padding: 18px 18px 0; }
+.card-heading { display: flex; align-items: center; gap: 10px; }
+.card-heading .dish-symbol { width: 38px; height: 38px; flex-shrink: 0; }
+.card-title { display: block; min-width: 0; flex: 1; }
+.card-category { font-size: 12px; color: #786858; margin-bottom: 3px; }
+.recipe-card h3 { font-size: 18px; line-height: 1.4; font-weight: 600; }
+.card-heading > .badge { align-self: flex-start; white-space: nowrap; font-size: 11px; }
+.card-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 17px 0 15px; }
+.card-metrics > div { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.card-metrics > div + div { border-inline-start: 1px solid var(--line); padding-inline-start: 14px; }
+.card-metrics > div > span { font-size: 12px; line-height: 1.6; color: #6e655f; }
+.card-metrics strong { font-size: 25px; font-weight: 500; line-height: 1.2; font-variant-numeric: tabular-nums; unicode-bidi: isolate; overflow-wrap: anywhere; }
+.card-metrics strong.not-set { font-size: 18px; color: #86786c; }
+.card-metrics small { color: #786e65; font-size: 12px; line-height: 1.4; }
+.card-bottom { padding: 12px 0; font-size: 12px; color: #6e655f; gap: 8px; }
+.card-bottom > span { line-height: 1.5; min-width: 0; }
+.card-bottom > span:last-child { text-align: left; flex-shrink: 0; }
+.card-bottom svg { width: 16px; height: 16px; }
+.detail-body { padding-top: 20px; }
+.detail-actions { margin-bottom: 19px; }
+.detail-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.detail-summary .cost-hero { padding: 22px 18px; justify-content: center; gap: 11px; border: 1px solid #e7dfd2; }
+.detail-summary .cost-hero > span { font-size: 14px; line-height: 1.6; }
+.detail-summary .cost-hero > strong { font-size: 34px; white-space: nowrap; }
+.detail-summary .cost-hero > small { font-size: 12px; line-height: 1.5; }
+.price-box.recommended { margin: 0; padding: 22px 18px; border-color: #d5bfcb; background: #f4edf0; justify-content: center; text-align: center; gap: 11px; }
+.price-box.recommended > span { display: flex; justify-content: center; align-items: center; gap: 7px; color: var(--wine); font-size: 14px; line-height: 1.6; }
+.price-box.recommended > span svg { width: 17px; height: 17px; }
+.price-box.recommended > strong { font-size: 36px; color: var(--wine); white-space: nowrap; }
+.price-box.recommended > small { font-size: 12px; color: #69575e; }
+.rounding-note { display: flex; flex-wrap: wrap; gap: 7px 20px; padding: 14px 2px; font-size: 12px; line-height: 1.7; color: #766a60; }
+.rounding-note b { font-weight: 500; color: #51443e; white-space: nowrap; }
+.existing-price { display: flex; align-items: center; justify-content: space-between; gap: 16px; border: 1px solid var(--line); padding: 19px; border-radius: 11px; margin-top: 8px; }
+.existing-price > div { display: grid; grid-template-columns: auto auto; gap: 8px 16px; align-items: center; }
+.existing-price > div > span { grid-column: 1/-1; font-size: 13px; color: #6e655f; }
+.existing-price strong { font-size: 27px; font-weight: 500; line-height: 1.3; }
+.existing-price small { font-size: 12px; color: #786e65; }
+.existing-price button { font-size: 13px; }
+.food-cost-panel { padding: 20px; border: 1px solid #dce3d3; border-radius: 11px; background: #f7f9f3; margin-top: 15px; --indicator: #667c50; }
+.food-cost-panel.above-target { border-color: #e6d4b9; background: #fff9ef; --indicator: #ac762f; }
+.fc-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.fc-heading h3 { font-size: 16px; font-weight: 500; }
+.fc-heading .badge { display: flex; align-items: center; gap: 5px; }
+.fc-heading .badge svg { width: 14px; height: 14px; }
+.fc-numbers { display: flex; align-items: flex-end; justify-content: space-between; margin-top: 23px; gap: 16px; }
+.fc-numbers > div { display: flex; flex-direction: column; gap: 8px; }
+.fc-numbers span { font-size: 13px; color: #6e655f; }
+.fc-numbers strong { font-size: 34px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.fc-numbers > div + div { text-align: left; }
+.fc-numbers > div + div strong { font-size: 25px; color: #695d53; }
+.fc-track { height: 9px; position: relative; background: #e7e5db; border-radius: 10px; margin-top: 21px; }
+.fc-fill { position: absolute; inset-inline-start: 0; top: 0; bottom: 0; background: var(--indicator); border-radius: 10px; }
+.fc-target { position: absolute; top: -5px; bottom: -5px; width: 3px; border-radius: 2px; background: #493d38; }
+.fc-scale { display: flex; justify-content: space-between; font-size: 11px; color: #7b7063; margin-top: 8px; }
+.fc-explanation { font-size: 13px; line-height: 1.8; margin-top: 14px; color: #5e5148; }
+.remainder { border-top: 1px solid #e2e2d4; padding-top: 16px; margin-top: 17px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.remainder > span { font-size: 12px; color: #6e655f; line-height: 1.7; }
+.remainder strong { font-size: 20px; font-weight: 500; white-space: nowrap; }
+.food-cost-panel .hint { margin: 9px 0 0; font-size: 12px; }
+.no-selling-price { font-size: 14px; color: #6e655f; line-height: 1.8; padding: 17px 0; }
+.no-selling-price .text-button { display: flex; font-size: 13px; }
+.detail-body .section-label { margin-top: 28px; gap: 14px; }
+.detail-body .section-label h3 { font-size: 17px; }
+.detail-body .section-label > span { font-size: 12px; color: #786e65; }
+.cost-lines > .cost-line { display: block; padding: 17px 0; }
+.cost-line-main { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.cost-lines strong { font-size: 15px; line-height: 1.7; }
+.cost-lines small { font-size: 12px; line-height: 1.5; }
+.cost-lines b { font-size: 18px; white-space: nowrap; }
+.line-amount { text-align: left; flex-shrink: 0; }
+.component-cost-track { height: 5px; background: #f0ede7; border-radius: 10px; overflow: hidden; margin-top: 12px; }
+.component-cost-track > span { display: block; height: 100%; border-radius: 10px; background: #bba5ac; }
+.notes p { font-size: 14px; }
+@media (max-width: 520px) {
+  main { padding: 24px 16px 20px; }
+  .page-heading { margin-bottom: 23px; }
+  .page-heading h1 { font-size: 27px; letter-spacing: -.7px; }
+  .page-heading p { font-size: 14px; line-height: 1.8; }
+  .eyebrow { font-size: 12px; color: #826c56; }
+  .page-heading > .primary { margin-top: 17px; min-height: 46px; font-size: 14px; }
+  .stats { gap: 8px; margin-bottom: 23px; }
+  .stat { padding: 14px 10px; }
+  .stat > div { gap: 9px; }
+  .stat > div > span { font-size: 12px; line-height: 1.5; max-width: none; padding-left: 0; min-height: 36px; color: #6e655f; }
+  .stat strong { font-size: 27px; }
+  .stat-icon { left: 8px; bottom: 14px; width: 24px; height: 24px; }
+  .collection-heading { margin-bottom: 14px; }
+  .collection-heading > div { gap: 7px; }
+  .collection-heading > div > span { font-size: 12px; }
+  .archive-filter { font-size: 12px; gap: 5px; }
+  .toolbar { margin-bottom: 15px; }
+  .toolbar input { font-size: 14px; min-height: 46px; }
+  .toolbar > select { font-size: 12px; width: 119px; min-width: 119px; }
+  .record-grid { gap: 12px; }
+  .recipe-card { padding: 16px 16px 0; border-radius: 12px; }
+  .card-heading { gap: 9px; }
+  .card-heading .dish-symbol { width: 33px; height: 33px; border-radius: 10px; }
+  .card-heading > .badge { font-size: 10px; padding: 4px 7px; }
+  .card-category { font-size: 12px; }
+  .recipe-card h3 { font-size: 18px; }
+  .card-metrics { padding-top: 16px; padding-bottom: 14px; }
+  .card-metrics strong { font-size: 25px; }
+  .card-bottom { font-size: 12px; min-height: 44px; }
+  .backup-nudge { font-size: 12px; line-height: 1.8; }
+  .backup-nudge > .text-button { font-size: 13px; }
+  .mobile-nav .nav-link { font-size: 11px; gap: 6px; min-height: 59px; }
+  .field > span { font-size: 13px; }
+  .dialog-head p { font-size: 12px; line-height: 1.6; }
+  .dialog-body { padding-inline: 17px; }
+  .hint { font-size: 13px; }
+  .detail-summary { gap: 9px; }
+  .detail-summary .cost-hero, .price-box.recommended { padding: 18px 10px; gap: 10px; }
+  .detail-summary .cost-hero > span, .price-box.recommended > span { font-size: 12px; }
+  .detail-summary .cost-hero > strong { font-size: 27px; }
+  .price-box.recommended > strong { font-size: 29px; }
+  .price-box.recommended > span { gap: 4px; }
+  .price-box.recommended > span svg { width: 14px; height: 14px; }
+  .detail-summary .cost-hero > small, .price-box.recommended > small { font-size: 11px; }
+  .rounding-note { font-size: 12px; gap: 5px; }
+  .existing-price { padding: 16px; gap: 10px; }
+  .existing-price > div { gap: 7px 10px; }
+  .existing-price strong { font-size: 25px; }
+  .existing-price button { font-size: 12px; padding-inline: 11px; }
+  .food-cost-panel { padding: 17px; }
+  .fc-heading { gap: 8px; }
+  .fc-heading h3 { font-size: 15px; }
+  .fc-heading .badge { font-size: 11px; }
+  .fc-numbers strong { font-size: 33px; }
+  .detail-body .section-label { flex-wrap: wrap; gap: 6px; }
+  .cost-line-main { gap: 12px; }
+  .cost-lines strong { font-size: 14px; }
+  .cost-lines b { font-size: 17px; }
+  .remainder { gap: 10px; }
+  .remainder strong { font-size: 19px; }
+  .remainder > span { font-size: 12px; }
+}
+/* Keep unusually large amounts within narrow summaries as well. */
+.detail-summary .cost-hero > strong, .price-box.recommended > strong { white-space: normal; overflow-wrap: anywhere; unicode-bidi: isolate; }

@@ -1,4 +1,5 @@
 import './style.css';
+import './design-refresh.css';
 import { createIcons, Grape, Utensils, CookingPot, Wheat, Settings, Plus, Search, ArrowLeft, X, Download, Upload, ShieldCheck, WifiOff, Check, Pencil, Copy, Archive, Trash2, CircleHelp, Leaf, ChevronLeft, ChefHat, RefreshCw } from 'lucide';
 import { units, defaults, ingredientCost, recipeCost, pricing, validateIngredient, validateRecipe, validateSettings, validateBackup, dependents, number } from './domain.js';
 import { db, readData, saveRecord, removeRecord, saveSettings, exportBackup, markExport, restoreBackup } from './db.js';
@@ -63,14 +64,36 @@ function listView() {
   ${!all.length && !query && !showArchive ? `<section class="getting-started"><span class="guide-icon">${icon('CircleHelp')}</span><div><h3>מקום קטן למספרים. יותר מקום ליצירה.</h3><p>חומרי גלם ← מתכוני משנה ← מנות ותמחור. כל הנתונים נשמרים במכשיר שלך.</p></div><button class="text-button" data-action="demo">טעינת דוגמה</button></section>` : ''}`;
 }
 function recipeCard(r) {
-  const c = safeCost(r), valid = !c.errors.length, p = valid ? pricing(c.perOutput,r,data.settings) : null, sub = r.kind === 'subrecipe';
+  const c = safeCost(r), valid = !c.errors.length;
+  const p = valid ? pricing(c.perOutput, r, data.settings) : null;
+  const sub = r.kind === 'subrecipe';
   const status = !valid ? 'חסר מידע' : p.actual?.gt(p.target) ? 'מעל היעד' : p.actual ? 'בתוך היעד' : sub ? 'מוכן לשימוש' : 'מוכן לתמחור';
-  return `<button class="recipe-card" data-action="detail" data-id="${esc(r.id)}"><div class="card-top"><span class="dish-symbol">${icon(sub ? 'CookingPot' : 'Utensils')}</span><span class="badge ${!valid || p.actual?.gt(p.target) ? 'warn' : 'good'}">${status}</span></div><span class="card-category">${esc(r.category || (sub ? 'מתכון משנה' : 'מנה'))}</span><h3>${esc(r.name)}</h3><span class="card-meta">${r.items.length} רכיבים <span>·</span> ${esc(r.outputQuantity)} ${sub ? units[r.outputUnit].label : 'מנות באצווה'}</span><div class="card-cost"><span>${sub ? `עלות ל${units[r.outputUnit].label}` : 'עלות למנה'}${!valid ? ' · חלקית' : ''}</span><strong>${money(c.perOutput, sub ? 3 : 2)}</strong></div><div class="card-bottom"><span>${sub ? 'צפייה בהרכב המתכון' : `Food Cost ${p?.actual ? pct(p.actual) : '—'}`}</span><span>${sub ? '' : r.sellingPrice ? money(r.sellingPrice) + ' לסועד' : 'טרם נקבע מחיר'} ${icon('ChevronLeft')}</span></div></button>`;
+  return `<button class="recipe-card" data-action="detail" data-id="${esc(r.id)}">
+    <div class="card-heading"><span class="dish-symbol">${icon(sub ? 'CookingPot' : 'Utensils')}</span>
+      <span class="card-title"><span class="card-category">${esc(r.category || (sub ? 'מתכון משנה' : 'מנה'))}</span><h3>${esc(r.name)}</h3></span>
+      <span class="badge ${!valid || p.actual?.gt(p.target) ? 'warn' : 'good'}">${status}</span>
+    </div>
+    <div class="card-metrics">
+      <div><span>${sub ? `עלות ל${units[r.outputUnit].label}` : 'עלות למנה'}${!valid ? ' · חלקית' : ''}</span><strong>${money(c.perOutput, sub ? 3 : 2)}</strong></div>
+      <div><span>${sub ? 'תפוקת המתכון' : 'מחיר בתפריט'}</span><strong class="${!sub && !r.sellingPrice ? 'not-set' : ''}">${sub ? `${esc(r.outputQuantity)} ${units[r.outputUnit].label}` : r.sellingPrice ? money(r.sellingPrice) : 'לא נקבע'}</strong></div>
+    </div>
+    <div class="card-bottom"><span>${sub ? `${r.items.length} רכיבים` : p?.actual ? `Food Cost בפועל: ${pct(p.actual)}` : `יעד Food Cost: ${esc(r.targetOverride || data.settings.target)}%`}</span><span>${sub ? 'לפרטי המתכון' : `${r.outputQuantity} מנות באצווה`} ${icon('ChevronLeft')}</span></div>
+  </button>`;
 }
 function ingredientCard(x) {
   let cost = null; try { cost = ingredientCost(x); } catch {}
   const base = x.purchaseUnit === 'kg' ? 'g' : x.purchaseUnit === 'l' ? 'ml' : x.purchaseUnit;
-  return `<button class="recipe-card ingredient-card" data-action="edit-ingredient" data-id="${esc(x.id)}"><div class="card-top"><span class="dish-symbol olive">${icon('Wheat')}</span><span class="badge ${cost === null ? 'warn' : 'neutral'}">${cost === null ? 'חסר מחיר' : `ניצולת ${esc(x.yieldPercent)}%`}</span></div><span class="card-category">${esc(x.category || 'חומר גלם')}</span><h3>${esc(x.name)}</h3><span class="card-meta">${esc(x.purchaseQuantity)} ${units[x.purchaseUnit].label} באריזה · ${x.purchasePriceNet === '' ? 'ללא מחיר' : money(x.purchasePriceNet)}</span><div class="card-cost"><span>עלות ל${units[base].label} שימושי</span><strong>${money(cost, 3)}</strong></div><div class="card-bottom"><span>עדכון מחיר ${date(x.priceUpdatedAt)}</span>${icon('Pencil')}</div></button>`;
+  return `<button class="recipe-card ingredient-card" data-action="edit-ingredient" data-id="${esc(x.id)}">
+    <div class="card-heading"><span class="dish-symbol olive">${icon('Wheat')}</span>
+      <span class="card-title"><span class="card-category">${esc(x.category || 'חומר גלם')}</span><h3>${esc(x.name)}</h3></span>
+      <span class="badge ${cost === null ? 'warn' : 'neutral'}">${cost === null ? 'חסר מחיר' : `ניצולת ${esc(x.yieldPercent)}%`}</span>
+    </div>
+    <div class="card-metrics">
+      <div><span>מחיר אריזה</span><strong>${x.purchasePriceNet === '' ? '—' : money(x.purchasePriceNet)}</strong><small>${esc(x.purchaseQuantity)} ${units[x.purchaseUnit].label} באריזה</small></div>
+      <div><span>עלות ל${units[base].label} שימושי</span><strong>${money(cost, 3)}</strong><small>לאחר ניצולת</small></div>
+    </div>
+    <div class="card-bottom"><span>עדכון מחיר: ${date(x.priceUpdatedAt)}</span><span>עריכה ${icon('Pencil')}</span></div>
+  </button>`;
 }
 function field(label, name, value, extra = '') { return `<label class="field"><span>${label}</span><input name="${name}" value="${esc(value)}" ${extra}></label>`; }
 function options(selected, subset = Object.keys(units)) { return subset.map(u => `<option value="${u}" ${u === selected ? 'selected' : ''}>${units[u].label}</option>`).join(''); }
@@ -152,10 +175,43 @@ function updatePreview() {
     else { const c = safeCost(r); el.innerHTML = `<div><span>עלות האצווה${c.errors.length ? ' · חלקית' : ''}</span><strong>${money(c.total)}</strong></div><div><span>עלות ל${r.kind === 'dish' ? 'מנה' : units[r.outputUnit]?.label}</span><strong>${money(c.perOutput,r.kind === 'dish' ? 2 : 3)}</strong></div>${c.errors.length ? `<small>${esc(c.errors[0])}</small>` : ''}`; }
   } catch (e) { el.innerHTML = `<span>${esc(e.message)}</span>`; }
 }
+function pricingOverview(r, c, p) {
+  const sub = r.kind === 'subrecipe';
+  const basis = data.settings.sellingBasis === 'gross' ? `כולל מס בשיעור ${esc(data.settings.taxRate)}%` : 'לפני מס';
+  const cost = `<div class="cost-hero"><span>עלות חומרי גלם ל${sub ? units[r.outputUnit].label : 'מנה'}${c.errors.length ? ' · חלקית' : ''}</span><strong>${money(c.perOutput, sub ? 3 : 2)}</strong><small>עלות האצווה: ${money(c.total)}</small></div>`;
+  if (sub || !p) return cost;
+  const above = p.actual?.gt(p.target);
+  const scale = Math.max(100, Math.ceil(Number(p.actual || 0) / 10) * 10);
+  const actualPosition = Number(p.actual || 0) / scale * 100;
+  const targetPosition = Number(p.target) / scale * 100;
+  const comparison = p.actual ? `<div class="food-cost-panel ${above ? 'above-target' : 'within-target'}">
+    <div class="fc-heading"><h3>המחיר מול היעד</h3><span class="badge ${above ? 'warn' : 'good'}">${icon(above ? 'CircleHelp' : 'Check')}${above ? 'מעל היעד' : 'בתוך היעד'}</span></div>
+    <div class="fc-numbers"><div><span>Food Cost בפועל</span><strong>${pct(p.actual)}</strong></div><div><span>היעד שלך</span><strong>${pct(p.target)}</strong></div></div>
+    <div class="fc-track" aria-hidden="true"><span class="fc-fill" style="width:${actualPosition}%"></span><span class="fc-target" style="inset-inline-start:${targetPosition}%"></span></div>
+    <div class="fc-scale" aria-hidden="true"><span>0%</span><span>${scale}%</span></div>
+    <p class="fc-explanation">${p.actual.eq(p.target) ? 'המחיר הקיים עומד בדיוק ביעד.' : `${above ? 'מעל היעד' : 'מתחת ליעד'} ב־${pct(p.actual.sub(p.target).abs()).replace('%','')} נקודות אחוז.`}</p>
+    <div class="remainder"><span>יתרה לאחר חומרי גלם, לפני מס</span><strong>${money(p.remainder)}</strong></div><p class="hint">היתרה אינה רווח נקי: עבודה, תקורות והוצאות נוספות אינן כלולות.</p>
+  </div>` : `<p class="no-selling-price">הזיני מחיר מכירה כדי לראות איך המנה עומדת מול היעד.</p>`;
+  return `<div class="detail-summary">${cost}<div class="price-box recommended"><span>${icon('Leaf')}מחיר מומלץ לסועד</span><strong>${money(p.rounded)}</strong><small>לפי יעד Food Cost של ${pct(p.target)}</small><small>${basis}</small></div></div>
+    <div class="rounding-note"><span>מחיר מחושב לפני עיגול: <b>${money(p.suggested)}</b></span><span>Food Cost במחיר המומלץ: <b>${pct(p.roundedPercent)}</b></span></div>
+    <section class="existing-price"><div><span>מחיר קיים בתפריט</span><strong>${r.sellingPrice ? money(r.sellingPrice) : 'טרם הוזן'}</strong><small>${basis}</small></div><button class="secondary" data-action="edit-recipe" data-id="${esc(r.id)}">${icon('Pencil')}${r.sellingPrice ? 'עדכון מחיר' : 'הזנת מחיר'}</button></section>${comparison}`;
+}
 function drawDetail(id) {
   const r = data.recipes.find(x => x.id === id); if (!r) { detailId = null; return; }
-  const c = safeCost(r), sub = r.kind === 'subrecipe', valid = !c.errors.length, p = valid ? pricing(c.perOutput,r,data.settings) : null;
-  showDialog(`${dialogHead(r.name, `${r.category || (sub ? 'מתכון משנה' : 'מנה')} · ${r.outputQuantity} ${sub ? units[r.outputUnit].label : 'מנות באצווה'}`)}<div class="dialog-body"><div class="detail-actions"><button class="secondary" data-action="edit-recipe" data-id="${esc(id)}">${icon('Pencil')}עריכה</button><button class="text-button" data-action="duplicate" data-id="${esc(id)}">${icon('Copy')}שכפול</button></div>${!valid ? `<div class="notice error"><strong>חסר מידע לתמחור מלא</strong><ul>${c.errors.map(e=>`<li>${esc(e)}</li>`).join('')}</ul></div>` : ''}<div class="cost-hero"><span>עלות חומרי גלם ל${sub ? units[r.outputUnit].label : 'מנה'}${valid ? '' : ' · חלקית'}</span><strong>${money(c.perOutput,sub ? 3 : 2)}</strong><small>עלות האצווה: ${money(c.total)}</small></div>${!sub && p ? `<div class="pricing-grid"><div class="price-box"><span>מחיר מוצע לפי יעד ${pct(p.target)}</span><strong>${money(p.rounded)}</strong><small>לפני עיגול: ${money(p.suggested)}</small><small>Food Cost במחיר המעוגל: ${pct(p.roundedPercent)}</small></div><div class="price-box"><span>בדיקת מחיר קיים</span><strong>${r.sellingPrice ? money(r.sellingPrice) : 'טרם הוזן'}</strong><small>Food Cost בפועל: ${pct(p.actual)}</small>${p.actual ? `<small class="${p.actual.gt(p.target) ? 'warning-text' : 'success-text'}">${p.actual.gt(p.target) ? 'מעל היעד' : 'בתוך היעד'} · פער ${pct(p.actual.sub(p.target).abs()).replace('%','')} נקודות אחוז</small>` : ''}</div></div><p class="hint">מחירי המכירה ${data.settings.sellingBasis === 'gross' ? `כוללים מס בשיעור ${esc(data.settings.taxRate)}%` : 'לפני מס'}. יתרה לאחר חומרי גלם: ${money(p.remainder)} לפני מס. אינה רווח נקי.</p>` : ''}<div class="section-label"><h3>הרכב ועלויות</h3><span>לכל האצווה</span></div><div class="cost-lines">${c.rows.map(row => `<div><span><strong>${esc(row.name)}</strong><small>${esc(row.quantity)} ${units[row.unit]?.label || ''}</small></span><b>${money(row.cost)}</b></div>`).join('')}</div>${r.notes ? `<div class="notes"><h3>הערות הכנה</h3><p>${esc(r.notes)}</p></div>` : ''}${sub ? `<div class="notes"><h3>בשימוש אצל</h3><p>${esc(dependents(r.id,'recipe',data.recipes).map(x=>x.name).join(' · ') || 'עדיין לא בשימוש')}</p></div>` : ''}</div>`,true);
+  const c = safeCost(r), sub = r.kind === 'subrecipe', valid = !c.errors.length;
+  const p = valid ? pricing(c.perOutput, r, data.settings) : null;
+  const rows = [...c.rows].sort((a, b) => Number(b.cost ?? -1) - Number(a.cost ?? -1));
+  showDialog(`${dialogHead(r.name, `${r.category || (sub ? 'מתכון משנה' : 'מנה')} · ${r.outputQuantity} ${sub ? units[r.outputUnit].label : 'מנות באצווה'}`)}
+    <div class="dialog-body detail-body"><div class="detail-actions"><button class="secondary" data-action="edit-recipe" data-id="${esc(id)}">${icon('Pencil')}עריכת ${sub ? 'מתכון' : 'מנה'}</button><button class="text-button" data-action="duplicate" data-id="${esc(id)}">${icon('Copy')}שכפול</button></div>
+    ${!valid ? `<div class="notice error"><strong>חסר מידע לתמחור מלא</strong><ul>${c.errors.map(e => `<li>${esc(e)}</li>`).join('')}</ul></div>` : ''}
+    ${pricingOverview(r, c, p)}
+    <div class="section-label"><h3>מה מרכיב את העלות?</h3><span>מהיקר לזול · לכל האצווה</span></div>
+    <div class="cost-lines">${rows.map(row => {
+      const share = valid && c.total?.gt(0) && row.cost !== null ? Number(row.cost.div(c.total).mul(100)) : null;
+      return `<div class="cost-line"><div class="cost-line-main"><span><strong>${esc(row.name)}</strong><small>${esc(row.quantity)} ${units[row.unit]?.label || ''}</small></span><span class="line-amount"><b>${money(row.cost)}</b>${share !== null ? `<small>${pct(share)} מעלות האצווה</small>` : ''}</span></div>${share !== null ? `<div class="component-cost-track" aria-hidden="true"><span style="width:${share}%"></span></div>` : ''}</div>`;
+    }).join('')}</div>
+    ${r.notes ? `<div class="notes"><h3>הערות הכנה</h3><p>${esc(r.notes)}</p></div>` : ''}
+    ${sub ? `<div class="notes"><h3>בשימוש אצל</h3><p>${esc(dependents(r.id, 'recipe', data.recipes).map(x => x.name).join(' · ') || 'עדיין לא בשימוש')}</p></div>` : ''}</div>`, true);
 }
 async function closeModal() {
   if (tutorialIndex !== null) return finishTutorial();
