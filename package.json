@@ -1,0 +1,9 @@
+{
+  "name": "winery-food-cost",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": { "dev": "vite --host 127.0.0.1", "build": "vite build", "preview": "vite preview --host 127.0.0.1", "test": "vitest run" },
+  "dependencies": { "decimal.js": "^10.6.0", "dexie": "^4.0.11", "lucide": "^0.468.0" },
+  "devDependencies": { "vite": "^6.4.1", "vitest": "^3.2.4", "fake-indexeddb": "^6.0.0" }
+}

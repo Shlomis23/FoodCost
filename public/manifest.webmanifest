@@ -1,0 +1,26 @@
+{
+  "id": "./",
+  "name": "כרם — תמחור מנות",
+  "short_name": "כרם",
+  "lang": "he",
+  "dir": "rtl",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f7f5f0",
+  "theme_color": "#523744",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "purpose": "any",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "icon-512.png",
+      "purpose": "any",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ]
+}
