@@ -3,7 +3,9 @@ import { createIcons, Grape, Utensils, CookingPot, Wheat, Settings, Plus, Search
 import { units, defaults, ingredientCost, recipeCost, pricing, validateIngredient, validateRecipe, validateSettings, validateBackup, dependents, number } from './domain.js';
 import { db, readData, saveRecord, removeRecord, saveSettings, exportBackup, markExport, restoreBackup } from './db.js';
 const icons = { Grape, Utensils, CookingPot, Wheat, Settings, Plus, Search, ArrowLeft, X, Download, Upload, ShieldCheck, WifiOff, Check, Pencil, Copy, Archive, Trash2, CircleHelp, Leaf, ChevronLeft, ChefHat, RefreshCw };
+import { tutorialSteps, shouldShowTutorial, completeTutorial } from './tutorial.js';
 const app = document.querySelector('#app');
+let tutorialIndex = null;
 let data = { ingredients: [], recipes: [], settings: defaults, meta: {} }, route = 'dishes', query = '', category = '', showArchive = false, editor = null, detailId = null, dirty = false, pendingRestore = null, registration, offlineReady = false;
 let toastTimer;
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
@@ -40,7 +42,7 @@ function nav() { return [['dishes','Utensils','המנות שלי'],['subrecipes'
 function render() {
   app.innerHTML = `<aside class="sidebar"><a class="brand" href="#/dishes"><span class="brand-mark">${icon('Grape')}</span><span><strong>כרם</strong><small>FOOD COST STUDIO</small></span></a><div class="sidebar-label">מהמטבח, עד לתפריט</div><nav aria-label="ניווט ראשי">${nav()}</nav><div class="sidebar-foot"><div class="local-note">${icon('ShieldCheck')}<span><strong>המידע נשאר אצלך</strong><small>שמירה מקומית במכשיר</small></span></div><span class="version">כרם · גרסה 1.0</span></div></aside>
   <div class="workspace"><header class="topbar"><span class="breadcrumb">היקב שלי <span>/</span> ${route === 'settings' ? 'הגדרות וגיבוי' : route === 'ingredients' ? 'חומרי גלם' : route === 'subrecipes' ? 'מתכוני משנה' : 'המנות שלי'}</span><div class="connection ${navigator.onLine ? '' : 'offline'}">${icon(navigator.onLine ? 'ShieldCheck' : 'WifiOff')}<span>${!navigator.onLine ? 'עבודה ללא רשת' : offlineReady ? 'מוכן לעבודה ללא רשת' : 'הנתונים נשמרים במכשיר'}</span></div></header><main id="main">${route === 'settings' ? settingsView() : listView()}</main><footer class="page-footer"><span>כל מנה טובה מתחילה בפרטים הקטנים.</span><span>כרם · תמחור עם מחשבה</span></footer></div><nav class="mobile-nav" aria-label="ניווט נייד">${nav()}</nav><dialog id="modal"></dialog>`;
-  refreshIcons(); if (editor) drawEditor(); else if (detailId) drawDetail(detailId); if (registration?.waiting) showUpdateButton();
+  refreshIcons(); if (tutorialIndex !== null) drawTutorial(); else if (editor) drawEditor(); else if (detailId) drawDetail(detailId); if (registration?.waiting) showUpdateButton();
 }
 function listView() {
   const ingredients = route === 'ingredients', subs = route === 'subrecipes', all = currentRecords(), active = all.filter(x => !x.archivedAt);
@@ -74,7 +76,42 @@ function field(label, name, value, extra = '') { return `<label class="field"><s
 function options(selected, subset = Object.keys(units)) { return subset.map(u => `<option value="${u}" ${u === selected ? 'selected' : ''}>${units[u].label}</option>`).join(''); }
 function settingsView() {
   const s = data.settings;
-  return `<section class="page-heading"><div><div class="eyebrow">סביבת העבודה שלך</div><h1>הכול במקום בטוח.</h1><p>העדפות תמחור, שמירה מקומית ועותק לדרך.</p></div></section><div class="settings-grid"><section class="panel"><div class="panel-title">${icon('Settings')}<h2>העדפות תמחור</h2></div><form id="settings-form"><div class="form-error" role="alert"></div><div class="fields two">${field('יעד Food Cost כללי (%)','target',s.target,'inputmode="decimal" required')}${field('עיגול מחיר מוצע כלפי מעלה (₪)','rounding',s.rounding,'inputmode="decimal" required')}</div><label class="field"><span>מחירי המכירה לסועד</span><select name="sellingBasis"><option value="net" ${s.sellingBasis === 'net' ? 'selected' : ''}>לפני מס</option><option value="gross" ${s.sellingBasis === 'gross' ? 'selected' : ''}>כולל מס</option></select></label>${field('שיעור מס שהגדרת (%)','taxRate',s.taxRate,'inputmode="decimal" required')}<p class="hint">עלויות חומרי גלם מוזנות לפני מס. שינוי בסיס המחיר ימיר מחירים קיימים תוך שמירה על ערכם לפני מס.</p><button class="primary" type="submit">${icon('Check')}שמירת העדפות</button></form></section><section class="panel"><div class="panel-title">${icon('ShieldCheck')}<h2>גיבוי ושחזור</h2></div><p>הנתונים נשמרים בדפדפן במכשיר הזה. קובץ גיבוי מאפשר לשחזר אותם או להעביר אותם לטלפון אחר.</p><div class="backup-date"><span>קובץ גיבוי אחרון שנוצר</span><strong>${date(data.meta.exportedAt)}</strong></div><button class="primary full" data-action="export">${icon('Download')}יצירת גיבוי JSON</button><button class="secondary full" data-action="import">${icon('Upload')}שחזור מקובץ גיבוי</button><input type="file" id="backup-file" accept=".json,application/json" hidden><p class="hint">שחזור מחליף את כל הנתונים הקיימים. הקובץ מכיל את מחירי הרכש והמתכונים שלך; שמרי אותו במקום מתאים.</p></section><section class="panel full-span"><div class="panel-title">${icon('Leaf')}<h2>אפליקציה קטנה, עצמאות מלאה</h2></div><div class="info-columns"><div><h3>גם בלי אינטרנט</h3><p>${offlineReady ? 'האפליקציה מוכנה לעבודה ללא רשת.' : 'הכנה לעבודה ללא רשת תושלם לאחר הפרסום וטעינה מוצלחת.'} הוספה למסך הבית זמינה דרך תפריט הדפדפן.</p></div><div><h3>המידע במכשיר שלך</h3><p>אין חשבון משתמש ואין סנכרון. ניקוי נתוני האתר עלול למחוק את המידע, ולכן כדאי ליצור גיבוי באופן קבוע.</p><button class="text-button" data-action="persist">בקשת אחסון מתמיד ${icon('ArrowLeft')}</button></div><div><h3>מה העלות כוללת?</h3><p>חומרי גלם בלבד. היתרה ממחיר המכירה אינה רווח נקי ואינה כוללת עבודה, תקורות והוצאות נוספות.</p></div></div></section></div>`;
+  return `<section class="page-heading"><div><div class="eyebrow">סביבת העבודה שלך</div><h1>הכול במקום בטוח.</h1><p>העדפות תמחור, שמירה מקומית ועותק לדרך.</p></div></section><section class="tutorial-entry"><span class="guide-icon">${icon('CircleHelp')}</span><div><h2>איך משתמשים בכרם?</h2><p>מדריך קצר, מחומרי הגלם ועד לתמחור ולגיבוי.</p></div><button class="secondary" data-action="tutorial-open">פתיחת המדריך ${icon('ArrowLeft')}</button></section><div class="settings-grid"><section class="panel"><div class="panel-title">${icon('Settings')}<h2>העדפות תמחור</h2></div><form id="settings-form"><div class="form-error" role="alert"></div><div class="fields two">${field('יעד Food Cost כללי (%)','target',s.target,'inputmode="decimal" required')}${field('עיגול מחיר מוצע כלפי מעלה (₪)','rounding',s.rounding,'inputmode="decimal" required')}</div><label class="field"><span>מחירי המכירה לסועד</span><select name="sellingBasis"><option value="net" ${s.sellingBasis === 'net' ? 'selected' : ''}>לפני מס</option><option value="gross" ${s.sellingBasis === 'gross' ? 'selected' : ''}>כולל מס</option></select></label>${field('שיעור מס שהגדרת (%)','taxRate',s.taxRate,'inputmode="decimal" required')}<p class="hint">עלויות חומרי גלם מוזנות לפני מס. שינוי בסיס המחיר ימיר מחירים קיימים תוך שמירה על ערכם לפני מס.</p><button class="primary" type="submit">${icon('Check')}שמירת העדפות</button></form></section><section class="panel"><div class="panel-title">${icon('ShieldCheck')}<h2>גיבוי ושחזור</h2></div><p>הנתונים נשמרים בדפדפן במכשיר הזה. קובץ גיבוי מאפשר לשחזר אותם או להעביר אותם לטלפון אחר.</p><div class="backup-date"><span>קובץ גיבוי אחרון שנוצר</span><strong>${date(data.meta.exportedAt)}</strong></div><button class="primary full" data-action="export">${icon('Download')}יצירת גיבוי JSON</button><button class="secondary full" data-action="import">${icon('Upload')}שחזור מקובץ גיבוי</button><input type="file" id="backup-file" accept=".json,application/json" hidden><p class="hint">שחזור מחליף את כל הנתונים הקיימים. הקובץ מכיל את מחירי הרכש והמתכונים שלך; שמרי אותו במקום מתאים.</p></section><section class="panel full-span"><div class="panel-title">${icon('Leaf')}<h2>אפליקציה קטנה, עצמאות מלאה</h2></div><div class="info-columns"><div><h3>גם בלי אינטרנט</h3><p>${offlineReady ? 'האפליקציה מוכנה לעבודה ללא רשת.' : 'הכנה לעבודה ללא רשת תושלם לאחר הפרסום וטעינה מוצלחת.'} הוספה למסך הבית זמינה דרך תפריט הדפדפן.</p></div><div><h3>המידע במכשיר שלך</h3><p>אין חשבון משתמש ואין סנכרון. ניקוי נתוני האתר עלול למחוק את המידע, ולכן כדאי ליצור גיבוי באופן קבוע.</p><button class="text-button" data-action="persist">בקשת אחסון מתמיד ${icon('ArrowLeft')}</button></div><div><h3>מה העלות כוללת?</h3><p>חומרי גלם בלבד. היתרה ממחיר המכירה אינה רווח נקי ואינה כוללת עבודה, תקורות והוצאות נוספות.</p></div></div></section></div>`;
+}
+function drawTutorial() {
+  const step = tutorialSteps[tutorialIndex];
+  const last = tutorialIndex === tutorialSteps.length - 1;
+  showDialog(`${dialogHead('ברוכה הבאה לכרם', 'ארבעה צעדים קצרים בדרך למנה מתומחרת')}
+    <div class="dialog-body tutorial-body">
+      <ol class="tutorial-progress" aria-label="שלבי המדריך">${tutorialSteps.map((s, i) => `<li ${i === tutorialIndex ? 'aria-current="step"' : ''} class="${i <= tutorialIndex ? 'reached' : ''}"><span>${i + 1}</span><span class="sr-only">${esc(s.title)}</span></li>`).join('')}</ol>
+      <span class="tutorial-symbol">${icon(step.icon)}</span>
+      <p class="tutorial-counter">שלב ${tutorialIndex + 1} מתוך ${tutorialSteps.length}</p>
+      <h3 id="tutorial-step-title" tabindex="-1">${esc(step.title)}</h3>
+      <p class="tutorial-description">${esc(step.description)}</p>
+      <div class="tutorial-example">${step.example.map(([label, value]) => `<div><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`).join('')}</div>
+      <p class="tutorial-tip">${icon('CircleHelp')}<span>${esc(step.tip)}</span></p>
+    </div>
+    <div class="dialog-footer tutorial-footer">
+      <button class="text-button" data-action="tutorial-finish">${last ? 'סגירה' : 'אדלג בינתיים'}</button>
+      <div><button class="secondary" data-action="tutorial-back" ${tutorialIndex === 0 ? 'disabled' : ''}>הקודם</button>
+      <button class="primary" data-action="${last ? 'tutorial-finish' : 'tutorial-next'}">${last ? 'הבנתי, אפשר להתחיל' : 'הבא'} ${icon(last ? 'Check' : 'ArrowLeft')}</button></div>
+    </div>`);
+  const modal = document.querySelector('#modal');
+  modal.classList.add('tutorial-dialog');
+  modal.scrollTop = 0;
+  modal.querySelector('#tutorial-step-title').focus({ preventScroll: true });
+}
+async function finishTutorial() {
+  let storageError = false;
+  try {
+    await completeTutorial();
+  } catch {
+    storageError = true;
+  } finally {
+    tutorialIndex = null;
+    document.querySelector('#modal')?.close();
+  }
+  if (storageError) toast('הבחירה לא נשמרה במכשיר. ייתכן שהמדריך יופיע שוב בכניסה הבאה', true);
 }
 function showDialog(html, wide = false) {
   const modal = document.querySelector('#modal'); modal.className = wide ? 'wide' : ''; modal.innerHTML = html; const title=modal.querySelector('h2'); if(title){title.id='dialog-title';modal.setAttribute('aria-labelledby','dialog-title');}
@@ -121,6 +158,7 @@ function drawDetail(id) {
   showDialog(`${dialogHead(r.name, `${r.category || (sub ? 'מתכון משנה' : 'מנה')} · ${r.outputQuantity} ${sub ? units[r.outputUnit].label : 'מנות באצווה'}`)}<div class="dialog-body"><div class="detail-actions"><button class="secondary" data-action="edit-recipe" data-id="${esc(id)}">${icon('Pencil')}עריכה</button><button class="text-button" data-action="duplicate" data-id="${esc(id)}">${icon('Copy')}שכפול</button></div>${!valid ? `<div class="notice error"><strong>חסר מידע לתמחור מלא</strong><ul>${c.errors.map(e=>`<li>${esc(e)}</li>`).join('')}</ul></div>` : ''}<div class="cost-hero"><span>עלות חומרי גלם ל${sub ? units[r.outputUnit].label : 'מנה'}${valid ? '' : ' · חלקית'}</span><strong>${money(c.perOutput,sub ? 3 : 2)}</strong><small>עלות האצווה: ${money(c.total)}</small></div>${!sub && p ? `<div class="pricing-grid"><div class="price-box"><span>מחיר מוצע לפי יעד ${pct(p.target)}</span><strong>${money(p.rounded)}</strong><small>לפני עיגול: ${money(p.suggested)}</small><small>Food Cost במחיר המעוגל: ${pct(p.roundedPercent)}</small></div><div class="price-box"><span>בדיקת מחיר קיים</span><strong>${r.sellingPrice ? money(r.sellingPrice) : 'טרם הוזן'}</strong><small>Food Cost בפועל: ${pct(p.actual)}</small>${p.actual ? `<small class="${p.actual.gt(p.target) ? 'warning-text' : 'success-text'}">${p.actual.gt(p.target) ? 'מעל היעד' : 'בתוך היעד'} · פער ${pct(p.actual.sub(p.target).abs()).replace('%','')} נקודות אחוז</small>` : ''}</div></div><p class="hint">מחירי המכירה ${data.settings.sellingBasis === 'gross' ? `כוללים מס בשיעור ${esc(data.settings.taxRate)}%` : 'לפני מס'}. יתרה לאחר חומרי גלם: ${money(p.remainder)} לפני מס. אינה רווח נקי.</p>` : ''}<div class="section-label"><h3>הרכב ועלויות</h3><span>לכל האצווה</span></div><div class="cost-lines">${c.rows.map(row => `<div><span><strong>${esc(row.name)}</strong><small>${esc(row.quantity)} ${units[row.unit]?.label || ''}</small></span><b>${money(row.cost)}</b></div>`).join('')}</div>${r.notes ? `<div class="notes"><h3>הערות הכנה</h3><p>${esc(r.notes)}</p></div>` : ''}${sub ? `<div class="notes"><h3>בשימוש אצל</h3><p>${esc(dependents(r.id,'recipe',data.recipes).map(x=>x.name).join(' · ') || 'עדיין לא בשימוש')}</p></div>` : ''}</div>`,true);
 }
 async function closeModal() {
+  if (tutorialIndex !== null) return finishTutorial();
   if (dirty && !(await confirmAction('לצאת בלי לשמור?', 'השינויים בטופס הזה לא נשמרו. אפשר לחזור לעריכה או להשליך אותם.', 'השלכת שינויים'))) return;
   editor = null; detailId = null; pendingRestore = null; dirty = false; document.querySelector('#modal')?.close();
 }
@@ -167,6 +205,10 @@ function showDeleteFeedback(refs, message = 'המחיקה לא בוצעה') {
   panel.scrollIntoView({ block: 'nearest', behavior: 'auto' });
 }
 const actions = {
+  'tutorial-open': () => { tutorialIndex = 0; drawTutorial(); },
+  'tutorial-next': () => { if (tutorialIndex < tutorialSteps.length - 1) { tutorialIndex++; drawTutorial(); } },
+  'tutorial-back': () => { if (tutorialIndex > 0) { tutorialIndex--; drawTutorial(); } },
+  'tutorial-finish': finishTutorial,
   new: () => newEditor(route === 'ingredients' ? 'ingredient' : route === 'subrecipes' ? 'subrecipe' : 'dish'),
   'edit-ingredient': id => newEditor('ingredient',id),
   detail: id => { detailId=id; drawDetail(id); },
@@ -263,4 +305,4 @@ async function initWorker(){
     if(!editor && !detailId) render(); if(registration.waiting) showUpdateButton();
   } catch {toast('הכנה לעבודה ללא רשת לא הושלמה. אפשר לנסות בטעינה הבאה',true);}
 }
-try {await refresh();setRoute();initWorker();} catch(error){app.innerHTML=`<main class="fatal"><h1>לא ניתן לפתוח את האחסון המקומי</h1><p>אפשר לנסות לפתוח את האתר בדפדפן רגיל ולוודא שאחסון אתרים מותר. הנתונים לא אופסו.</p><p>${esc(error.message)}</p><button onclick="location.reload()">ניסיון נוסף</button></main>`;}
+try {await refresh();setRoute();if(await shouldShowTutorial()){tutorialIndex=0;drawTutorial();}initWorker();} catch(error){app.innerHTML=`<main class="fatal"><h1>לא ניתן לפתוח את האחסון המקומי</h1><p>אפשר לנסות לפתוח את האתר בדפדפן רגיל ולוודא שאחסון אתרים מותר. הנתונים לא אופסו.</p><p>${esc(error.message)}</p><button onclick="location.reload()">ניסיון נוסף</button></main>`;}
