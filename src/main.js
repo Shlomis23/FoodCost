@@ -11,7 +11,26 @@ const icon = name => `<i data-lucide="${name.replace(/([a-z])([A-Z])/g, '$1-$2')
 const money = (v, precision = 2) => v === null || v === undefined ? '—' : new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', minimumFractionDigits: precision, maximumFractionDigits: precision }).format(Number(v));
 const pct = v => v === null || v === undefined ? '—' : `${Number(v).toFixed(1).replace('.0','')}%`;
 const date = v => v ? new Intl.DateTimeFormat('he-IL', { day:'numeric', month:'short', year:'numeric' }).format(new Date(v)) : 'טרם נוצר';
-function toast(message, error = false) { const el = document.querySelector('#toast'); el.textContent = message; el.className = `visible ${error ? 'error' : ''}`; clearTimeout(toastTimer); toastTimer = setTimeout(() => el.className = '', 5000); }
+function toast(message, error = false) {
+  const dialogs = [...document.querySelectorAll('dialog[open]')];
+  const dialog = dialogs.at(-1);
+  let el = document.querySelector('#toast');
+  if (dialog) {
+    el = dialog.querySelector('.dialog-toast');
+    if (!el) {
+      el = document.createElement('div');
+      el.className = 'dialog-toast';
+      el.setAttribute('role', 'status');
+      el.setAttribute('aria-live', 'polite');
+      dialog.append(el);
+    }
+  }
+  el.textContent = message;
+  const baseClass = dialog ? 'dialog-toast' : '';
+  el.className = `${baseClass} visible ${error ? 'error' : ''}`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.className = baseClass; }, 5000);
+}
 function refreshIcons() { createIcons({ icons, attrs: { 'stroke-width': 1.7 } }); }
 async function refresh() { data = await readData(); render(); }
 function safeCost(r) { try { return recipeCost(r, data.recipes, data.ingredients); } catch (e) { return { errors: [e.message], total: null, perOutput: null, rows: [] }; } }
@@ -77,7 +96,7 @@ function drawEditor() {
     const unit = row.type === 'ingredient' ? comp?.purchaseUnit : comp?.outputUnit;
     return `<div class="component-row"><div><strong>${esc(comp?.name || 'רכיב חסר')}</strong><small>${row.type === 'recipe' ? 'מתכון משנה' : 'חומר גלם'}</small></div><label><span class="sr-only">כמות ${esc(comp?.name)}</span><input name="qty-${i}" value="${esc(row.quantity)}" inputmode="decimal" required></label><select name="unit-${i}" aria-label="יחידה ${esc(comp?.name)}">${options(row.unit, Object.keys(units).filter(u => units[u].family === units[unit]?.family))}</select><button type="button" class="icon-button danger" data-action="remove-row" data-index="${i}" aria-label="הסרת ${esc(comp?.name)}">${icon('X')}</button></div>`;
   }).join('') || '<p class="hint">הוסיפי חומר גלם או מתכון משנה כדי להתחיל לחשב.</p>'}</div><div class="add-component"><select id="component-picker" aria-label="בחירת רכיב"><option value="">בחירת רכיב להוספה…</option><optgroup label="חומרי גלם">${data.ingredients.filter(x => !x.archivedAt).sort((a,b)=>a.name.localeCompare(b.name,'he')).map(x => `<option value="ingredient:${esc(x.id)}">${esc(x.name)}</option>`).join('')}</optgroup><optgroup label="מתכוני משנה">${data.recipes.filter(x => x.kind === 'subrecipe' && !x.archivedAt && x.id !== r.id).map(x => `<option value="recipe:${esc(x.id)}">${esc(x.name)}</option>`).join('')}</optgroup></select><button type="button" class="secondary" data-action="add-row">${icon('Plus')}הוספה</button></div>${!data.ingredients.length ? '<p class="hint">כדי להתחיל, סגרי את הטופס והוסיפי חומרי גלם בלשונית המזווה.</p>' : ''}<div class="editor-preview" id="cost-preview"></div>${!sub ? `<div class="section-label"><h3>תמחור</h3></div><div class="fields two">${field('יעד Food Cost ייחודי (%)','targetOverride',r.targetOverride,`inputmode="decimal" placeholder="היעד הכללי: ${esc(data.settings.target)}%"`)}${field(`מחיר קיים לסועד (₪, ${data.settings.sellingBasis === 'gross' ? 'כולל מס' : 'לפני מס'})`,'sellingPrice',r.sellingPrice,'inputmode="decimal" placeholder="לא חובה"')}</div>` : ''}<label class="field"><span>הערות הכנה</span><textarea name="notes" rows="3" maxlength="4000">${esc(r.notes)}</textarea></label>`;
-  showDialog(`${dialogHead(r.revision ? 'עריכת '+(ingredient ? 'חומר גלם' : sub ? 'מתכון משנה' : 'מנה') : 'הוספת '+(ingredient ? 'חומר גלם' : sub ? 'מתכון משנה' : 'מנה'), 'נשמר במכשיר שלך, זמין גם ללא רשת')}<form id="editor-form"><div class="dialog-body"><div class="form-error" role="alert"></div>${body}${r.revision ? `<div class="record-actions"><button type="button" class="text-button" data-action="archive">${icon('Archive')}${r.archivedAt ? 'הוצאה מארכיון' : 'העברה לארכיון'}</button><button type="button" class="text-button danger" data-action="delete">${icon('Trash2')}מחיקה</button></div>` : ''}</div><div class="dialog-footer"><span id="save-state">${dirty ? 'שינויים שלא נשמרו' : r.revision ? 'נשמר במכשיר' : 'פריט חדש'}</span><button type="button" class="secondary" data-action="close">ביטול</button><button type="submit" class="primary">${icon('Check')}שמירה</button></div></form>`, !ingredient);
+  showDialog(`${dialogHead(r.revision ? 'עריכת '+(ingredient ? 'חומר גלם' : sub ? 'מתכון משנה' : 'מנה') : 'הוספת '+(ingredient ? 'חומר גלם' : sub ? 'מתכון משנה' : 'מנה'), 'נשמר במכשיר שלך, זמין גם ללא רשת')}<form id="editor-form"><div class="dialog-body"><div class="form-error" role="alert"></div>${body}${r.revision ? `<div id="delete-feedback" class="delete-feedback" role="alert" tabindex="-1" hidden></div><div class="record-actions"><button type="button" class="text-button" data-action="archive">${icon('Archive')}${r.archivedAt ? 'הוצאה מארכיון' : 'העברה לארכיון'}</button><button type="button" class="text-button danger" data-action="delete">${icon('Trash2')}מחיקה</button></div>` : ''}</div><div class="dialog-footer"><span id="save-state">${dirty ? 'שינויים שלא נשמרו' : r.revision ? 'נשמר במכשיר' : 'פריט חדש'}</span><button type="button" class="secondary" data-action="close">ביטול</button><button type="submit" class="primary">${icon('Check')}שמירה</button></div></form>`, !ingredient);
   updatePreview();
 }
 function collectEditor() {
@@ -132,6 +151,21 @@ async function loadDemo() {
   await db.transaction('rw',db.tables,async()=>{for(const x of [tomatoes,cheese,oil]) await saveRecord('ingredients',x); await saveRecord('recipes',dressing); await saveRecord('recipes',dish);});
   toast('נתוני הדוגמה נוספו. הכול ניתן לעריכה'); await refresh();
 }
+function showDeleteFeedback(refs, message = 'המחיקה לא בוצעה') {
+  const panel = document.querySelector('#delete-feedback');
+  if (!panel) return toast(message, true);
+  panel.hidden = false;
+  panel.innerHTML = refs.length
+    ? `<strong>לא ניתן למחוק — הפריט עדיין בשימוש</strong>
+       <p>המנות ומתכוני המשנה הבאים תלויים בפריט, ישירות או דרך מתכון משנה:</p>
+       <ul>${refs.map(r => `<li><strong>${esc(r.name)}</strong><span>${r.kind === 'dish' ? 'מנה' : 'מתכון משנה'}${r.archivedAt ? ' · בארכיון' : ''}</span></li>`).join('')}</ul>
+       <p>למחיקה, הסירי את הפריט מהמתכונים שבהם הוא רכיב ושמרי אותם. אפשר גם להעביר אותו לארכיון כדי להסתירו מבחירה חדשה ולשמור על חישובי המנות הקיימות.</p>
+       <button type="button" class="secondary" data-action="archive">${icon('Archive')}העברה לארכיון במקום מחיקה</button>`
+    : `<strong>המחיקה לא בוצעה</strong><p>${esc(message)}</p>`;
+  refreshIcons();
+  panel.focus({ preventScroll: true });
+  panel.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+}
 const actions = {
   new: () => newEditor(route === 'ingredients' ? 'ingredient' : route === 'subrecipes' ? 'subrecipe' : 'dish'),
   'edit-ingredient': id => newEditor('ingredient',id),
@@ -142,7 +176,26 @@ const actions = {
   'remove-row': (_,el) => { collectEditor(); editor.record.items.splice(Number(el.dataset.index),1); dirty=true; drawEditor(); },
   duplicate: id => { const source = data.recipes.find(x=>x.id===id); newEditor(source.kind,id); editor.record.id=crypto.randomUUID(); editor.record.revision=0; editor.record.name='עותק של '+source.name; editor.record.archivedAt=null; dirty=true; drawEditor(); },
   archive: async () => { const table = editor.type === 'ingredient' ? 'ingredients' : 'recipes'; const original = data[table].find(x=>x.id===editor.record.id); const refs=dependents(original.id,table==='ingredients'?'ingredient':'recipe',data.recipes); if (!(await confirmAction(original.archivedAt ? 'להחזיר מהארכיון?' : 'להעביר לארכיון?',refs.length ? `הפריט ימשיך להשתתף בחישוב ${refs.length} מתכונים ומנות קיימים. עריכות שלא נשמרו בטופס לא ייכללו.` : 'הפריט יוסתר מבחירה חדשה. עריכות שלא נשמרו בטופס לא ייכללו.'))) return; await saveRecord(table,{...original,archivedAt:original.archivedAt ? null : new Date().toISOString()}); editor=null; dirty=false; await refresh(); toast('הארכיון עודכן'); },
-  delete: async () => { const table=editor.type==='ingredient'?'ingredients':'recipes',r=editor.record; const refs=dependents(r.id,table==='ingredients'?'ingredient':'recipe',data.recipes); if(refs.length) return toast('הפריט בשימוש: '+refs.map(x=>x.name).join(' · '),true); if(!(await confirmAction('למחוק את הפריט?',`הפריט ״${r.name}״ יימחק לצמיתות. ניתן לשחזר רק מגיבוי.`, 'מחיקה'))) return; await removeRecord(table,r.id,r.revision); editor=null; dirty=false; await refresh(); toast('הפריט נמחק'); },
+  delete: async () => {
+    const table = editor.type === 'ingredient' ? 'ingredients' : 'recipes';
+    const record = editor.record;
+    const type = table === 'ingredients' ? 'ingredient' : 'recipe';
+    const fresh = await readData();
+    const refs = dependents(record.id, type, fresh.recipes);
+    if (refs.length) return showDeleteFeedback(refs);
+    if (!(await confirmAction('למחוק את הפריט?', `הפריט ״${record.name}״ יימחק לצמיתות. ניתן לשחזר רק מגיבוי.`, 'מחיקה'))) return;
+    try {
+      await removeRecord(table, record.id, record.revision);
+    } catch (error) {
+      // A different tab may add a dependency after the initial check.
+      const latest = await readData();
+      return showDeleteFeedback(dependents(record.id, type, latest.recipes), error.message);
+    }
+    editor = null;
+    dirty = false;
+    await refresh();
+    toast('הפריט נמחק');
+  },
   export: doExport,
   import: () => document.querySelector('#backup-file').click(),
   'cancel-restore': () => {pendingRestore=null; document.querySelector('#modal').close();},
