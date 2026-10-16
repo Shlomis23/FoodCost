@@ -5,6 +5,8 @@ import { units, defaults, ingredientCost, recipeCost, pricing, validateIngredien
 import { db, readData, saveRecord, removeRecord, saveSettings, exportBackup, markExport, restoreBackup } from './db.js';
 const icons = { Grape, Utensils, CookingPot, Wheat, Settings, Plus, Search, ArrowLeft, X, Download, Upload, ShieldCheck, WifiOff, Check, Pencil, Copy, Archive, Trash2, CircleHelp, Leaf, ChevronLeft, ChefHat, RefreshCw };
 import { tutorialSteps, shouldShowTutorial, completeTutorial } from './tutorial.js';
+import { createDialogScrollManager } from './dialog-scroll.js';
+const modalScroll = createDialogScrollManager({ document, window });
 const app = document.querySelector('#app');
 let tutorialIndex = null;
 let data = { ingredients: [], recipes: [], settings: defaults, meta: {} }, route = 'dishes', query = '', category = '', showArchive = false, editor = null, detailId = null, dirty = false, pendingRestore = null, registration, offlineReady = false;
@@ -43,7 +45,7 @@ function nav() { return [['dishes','Utensils','המנות שלי'],['subrecipes'
 function render() {
   app.innerHTML = `<aside class="sidebar"><a class="brand" href="#/dishes"><span class="brand-mark">${icon('Grape')}</span><span><strong>כרם</strong><small>FOOD COST STUDIO</small></span></a><div class="sidebar-label">מהמטבח, עד לתפריט</div><nav aria-label="ניווט ראשי">${nav()}</nav><div class="sidebar-foot"><div class="local-note">${icon('ShieldCheck')}<span><strong>המידע נשאר אצלך</strong><small>שמירה מקומית במכשיר</small></span></div><span class="version">כרם · גרסה 1.0</span></div></aside>
   <div class="workspace"><header class="topbar"><span class="breadcrumb">היקב שלי <span>/</span> ${route === 'settings' ? 'הגדרות וגיבוי' : route === 'ingredients' ? 'חומרי גלם' : route === 'subrecipes' ? 'מתכוני משנה' : 'המנות שלי'}</span><div class="connection ${navigator.onLine ? '' : 'offline'}">${icon(navigator.onLine ? 'ShieldCheck' : 'WifiOff')}<span>${!navigator.onLine ? 'עבודה ללא רשת' : offlineReady ? 'מוכן לעבודה ללא רשת' : 'הנתונים נשמרים במכשיר'}</span></div></header><main id="main">${route === 'settings' ? settingsView() : listView()}</main><footer class="page-footer"><span>כל מנה טובה מתחילה בפרטים הקטנים.</span><span>כרם · תמחור עם מחשבה</span></footer></div><nav class="mobile-nav" aria-label="ניווט נייד">${nav()}</nav><dialog id="modal"></dialog>`;
-  refreshIcons(); if (tutorialIndex !== null) drawTutorial(); else if (editor) drawEditor(); else if (detailId) drawDetail(detailId); if (registration?.waiting) showUpdateButton();
+  refreshIcons(); if (tutorialIndex !== null) drawTutorial(); else if (editor) drawEditor(); else if (detailId) drawDetail(detailId); if (registration?.waiting) showUpdateButton(); modalScroll.sync();
 }
 function listView() {
   const ingredients = route === 'ingredients', subs = route === 'subrecipes', all = currentRecords(), active = all.filter(x => !x.archivedAt);
@@ -132,13 +134,13 @@ async function finishTutorial() {
     storageError = true;
   } finally {
     tutorialIndex = null;
-    document.querySelector('#modal')?.close();
+    modalScroll.close(document.querySelector('#modal'));
   }
   if (storageError) toast('הבחירה לא נשמרה במכשיר. ייתכן שהמדריך יופיע שוב בכניסה הבאה', true);
 }
 function showDialog(html, wide = false) {
   const modal = document.querySelector('#modal'); modal.className = wide ? 'wide' : ''; modal.innerHTML = html; const title=modal.querySelector('h2'); if(title){title.id='dialog-title';modal.setAttribute('aria-labelledby','dialog-title');}
-  if (!modal.open) modal.showModal(); refreshIcons();
+  modalScroll.open(modal); refreshIcons();
 }
 function dialogHead(title, sub = '') { return `<div class="dialog-head"><div><h2>${esc(title)}</h2>${sub ? `<p>${esc(sub)}</p>` : ''}</div><button class="icon-button" data-action="close" aria-label="סגירה">${icon('X')}</button></div>`; }
 function newEditor(type, id) {
@@ -216,14 +218,14 @@ function drawDetail(id) {
 async function closeModal() {
   if (tutorialIndex !== null) return finishTutorial();
   if (dirty && !(await confirmAction('לצאת בלי לשמור?', 'השינויים בטופס הזה לא נשמרו. אפשר לחזור לעריכה או להשליך אותם.', 'השלכת שינויים'))) return;
-  editor = null; detailId = null; pendingRestore = null; dirty = false; document.querySelector('#modal')?.close();
+  editor = null; detailId = null; pendingRestore = null; dirty = false; modalScroll.close(document.querySelector('#modal'));
 }
 function confirmAction(title, description, button = 'אישור') {
   return new Promise(resolve => {
     const dialog = document.createElement('dialog'); dialog.className = 'confirm-dialog';
     dialog.innerHTML = `<div class="dialog-body"><h2>${esc(title)}</h2><p>${esc(description)}</p></div><div class="dialog-footer"><button class="secondary" data-confirm="no">חזרה</button><button class="primary" data-confirm="yes">${esc(button)}</button></div>`;
-    document.body.append(dialog); dialog.showModal();
-    const done = value => { dialog.close(); dialog.remove(); resolve(value); };
+    document.body.append(dialog); modalScroll.open(dialog);
+    const done = value => { modalScroll.close(dialog); dialog.remove(); resolve(value); };
     dialog.addEventListener('click',e => { const b = e.target.closest('[data-confirm]'); if (b) done(b.dataset.confirm === 'yes'); });
     dialog.addEventListener('cancel',e => {e.preventDefault(); done(false);});
   });
@@ -296,8 +298,8 @@ const actions = {
   },
   export: doExport,
   import: () => document.querySelector('#backup-file').click(),
-  'cancel-restore': () => {pendingRestore=null; document.querySelector('#modal').close();},
-  'confirm-restore': async () => { const pending=pendingRestore; if(!pending) return; await restoreBackup(pending.input,pending.revision); pendingRestore=null; document.querySelector('#modal').close(); await refresh(); toast('הגיבוי שוחזר בהצלחה'); },
+  'cancel-restore': () => {pendingRestore=null; modalScroll.close(document.querySelector('#modal'));},
+  'confirm-restore': async () => { const pending=pendingRestore; if(!pending) return; await restoreBackup(pending.input,pending.revision); pendingRestore=null; modalScroll.close(document.querySelector('#modal')); await refresh(); toast('הגיבוי שוחזר בהצלחה'); },
   demo: loadDemo,
   persist: async () => { const granted = await navigator.storage?.persist?.(); toast(granted ? 'הדפדפן אישר אחסון מתמיד. עדיין מומלץ לגבות' : 'לא ניתן לאשר אחסון מתמיד בדפדפן הזה. אפשר להמשיך ולגבות כרגיל'); },
   update: async () => { if(dirty && !(await confirmAction('לטעון גרסה חדשה?', 'השינויים שלא נשמרו בטופס יאבדו.', 'טעינת הגרסה'))) return; dirty=false; registration.waiting?.postMessage({type:'SKIP_WAITING'}); }

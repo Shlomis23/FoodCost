@@ -148,3 +148,9 @@ input, select, textarea { font-size: 16px; }
 }
 /* Keep unusually large amounts within narrow summaries as well. */
 .detail-summary .cost-hero > strong, .price-box.recommended > strong { white-space: normal; overflow-wrap: anywhere; unicode-bidi: isolate; }
+
+/* The dialog is the only scroll surface while it is open. */
+html { scrollbar-gutter: stable; }
+html.modal-scroll-locked, html.modal-scroll-locked body { overscroll-behavior: none; }
+dialog[open] { overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+dialog::backdrop { touch-action: none; }
