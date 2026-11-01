@@ -1,0 +1,22 @@
+.unit-weight-field { grid-column: 1 / -1; padding: 15px; border-radius: 9px; background: #f4f0e8; margin-bottom: 18px; }
+.unit-weight-field[hidden] { display: none; }
+.unit-weight-field .field { margin-bottom: 7px; }
+.unit-weight-field .hint { margin: 5px 0 0; }
+.component-picker { margin: 19px 0; border: 1px solid var(--line); border-radius: 11px; padding: 15px; background: #faf8f3; }
+.component-picker .field { margin-bottom: 9px; }
+.component-search-wrap { display: flex; position: relative; align-items: center; }
+.component-search-wrap > svg { position: absolute; right: 13px; width: 18px; height: 18px; color: #8c7a6d; }
+.component-search-wrap > input { width: 100%; padding-right: 40px; font-size: 16px; }
+.component-count { font-size: 12px; color: #74695f; margin: 0 0 11px; line-height: 1.7; }
+.component-results { max-height: 230px; overflow-y: auto; overscroll-behavior: contain; border: 1px solid var(--line); border-radius: 8px; background: #fffefa; }
+.component-result { width: 100%; min-height: 61px; display: flex; align-items: center; gap: 11px; padding: 12px; text-align: right; background: transparent; border: 0; }
+.component-results > div + div { border-top: 1px solid var(--line); }
+.component-result:hover, .component-result:focus-visible { background: #f0e8ec; }
+.component-result > span:nth-child(2) { flex: 1; min-width: 0; }
+.component-result strong { display: block; font-size: 14px; font-weight: 500; overflow-wrap: anywhere; line-height: 1.6; }
+.component-result small { display: block; margin-top: 4px; font-size: 12px; color: #77695f; line-height: 1.5; }
+.result-symbol, .result-add { color: var(--wine); display: grid; place-items: center; flex-shrink: 0; }
+.result-symbol { width: 30px; height: 30px; border-radius: 8px; background: #f1e9ec; }
+.result-symbol svg, .result-add svg { width: 17px; height: 17px; }
+.component-empty { font-size: 13px; line-height: 1.9; padding: 16px; color: #76685e; }
+@media (max-width: 520px) { .component-picker { padding: 12px; } .component-result { padding: 11px 9px; gap: 8px; } .component-count { font-size: 11px; } }

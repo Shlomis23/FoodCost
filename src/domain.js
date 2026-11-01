@@ -18,12 +18,29 @@ export function validateIngredient(x) {
   if (!x.name?.trim()) throw new Error('יש להזין שם חומר גלם');
   positive(x.purchaseQuantity); percent(x.yieldPercent, 'ניצולת');
   if (!units[x.purchaseUnit]) throw new Error('יש לבחור יחידה');
+  if (x.unitWeightGrams !== undefined && x.unitWeightGrams !== '') {
+    if (typeof x.unitWeightGrams !== 'string' || x.purchaseUnit !== 'unit') throw new Error('משקל ליחידה מתאים לחומר גלם שנרכש ביחידות בלבד');
+    positive(x.unitWeightGrams, 'משקל יחידה');
+  }
   if (x.purchasePriceNet !== '') { number(x.purchasePriceNet); if (number(x.purchasePriceNet).eq(0) && !x.zeroConfirmed) throw new Error('מחיר אפס דורש אישור מפורש'); }
 }
 export function ingredientCost(x) {
   validateIngredient(x);
   if (x.purchasePriceNet === '') throw new Error(`חסר מחיר: ${x.name}`);
   return number(x.purchasePriceNet).div(positive(x.purchaseQuantity).mul(units[x.purchaseUnit].factor).mul(number(x.yieldPercent).div(100)));
+}
+// Return the amount in the ingredient's existing purchase-family base unit.
+// Unit weight is raw purchased weight; ingredientCost applies yield once.
+export function ingredientUsageQuantity(ingredient, quantity, usageUnit) {
+  if (ingredient.purchaseUnit === 'unit' && units[usageUnit]?.family === 'mass') {
+    if (!ingredient.unitWeightGrams) throw new Error(`כדי להשתמש בגרמים בחומר הגלם ״${ingredient.name}״ יש להגדיר משקל ליחידה`);
+    return positive(quantity).mul(units[usageUnit].factor).div(positive(ingredient.unitWeightGrams, 'משקל יחידה'));
+  }
+  return convert(quantity, usageUnit, ingredient.purchaseUnit).mul(units[ingredient.purchaseUnit].factor);
+}
+export function ingredientRecipeUnits(ingredient) {
+  if (ingredient.purchaseUnit === 'unit' && ingredient.unitWeightGrams) return ['g', 'kg', 'unit'];
+  return Object.keys(units).filter(unit => units[unit].family === units[ingredient.purchaseUnit]?.family);
 }
 export function validateSettings(s) {
   percent(s.target, 'יעד Food Cost'); number(s.taxRate); if (number(s.taxRate).gt(100)) throw new Error('שיעור מס לא תקין');
@@ -43,7 +60,8 @@ export function validateRecipe(x, recipes, ingredients, { complete = false } = {
     const component = (row.type === 'ingredient' ? ingredients : recipes).find(v => v.id === row.componentId);
     if (!component) throw new Error('אחד הרכיבים אינו קיים');
     if (row.type === 'recipe' && component.kind !== 'subrecipe') throw new Error('ניתן להוסיף רק מתכון משנה');
-    convert(row.quantity, row.unit, row.type === 'ingredient' ? component.purchaseUnit : component.outputUnit);
+    if (row.type === 'ingredient') ingredientUsageQuantity(component, row.quantity, row.unit);
+    else convert(row.quantity, row.unit, component.outputUnit);
   }
   const all = recipes.filter(r => r.id !== x.id).concat(x);
   const checked = new Set();
@@ -67,7 +85,7 @@ export function recipeCost(recipe, recipes, ingredients, path = [], memo = new M
     const component = (row.type === 'ingredient' ? ingredients : recipes).find(x => x.id === row.componentId);
     try {
       if (!component) throw new Error('רכיב חסר');
-      if (row.type === 'ingredient') cost = ingredientCost(component).mul(positive(row.quantity).mul(units[row.unit].factor));
+      if (row.type === 'ingredient') cost = ingredientCost(component).mul(ingredientUsageQuantity(component, row.quantity, row.unit));
       else {
         const nested = recipeCost(component, recipes, ingredients, [...path, recipe.id], memo);
         if (nested.errors.length) throw new Error(nested.errors.join('; '));
@@ -95,7 +113,7 @@ export function dependents(id, type, recipes) {
   visit(id, type); return recipes.filter(r => found.has(r.id));
 }
 export function validateBackup(input) {
-  if (!input || input.format !== 'winery-food-cost' || input.schemaVersion !== 1) throw new Error('פורמט או גרסת גיבוי אינם נתמכים');
+  if (!input || input.format !== 'winery-food-cost' || ![1, 2].includes(input.schemaVersion)) throw new Error('פורמט או גרסת גיבוי אינם נתמכים');
   const d = input.data;
   if (!d || !Array.isArray(d.ingredients) || !Array.isArray(d.recipes) || !d.settings) throw new Error('קובץ הגיבוי חסר נתונים');
   validateSettings(d.settings);
@@ -105,7 +123,7 @@ export function validateBackup(input) {
     ids.add(x.id);
     for (const key of ['name','category','supplierName','notes']) if (x[key] !== undefined && (typeof x[key] !== 'string' || x[key].length > 4000)) throw new Error('שדה טקסט לא תקין בגיבוי');
     for (const key of ['createdAt','updatedAt','priceUpdatedAt','archivedAt']) if (x[key] != null && (typeof x[key] !== 'string' || isNaN(new Date(x[key]).getTime()))) throw new Error('תאריך לא תקין בגיבוי');
-    for (const key of ['purchaseQuantity','purchasePriceNet','yieldPercent','outputQuantity','targetOverride','sellingPrice']) if (x[key] !== undefined && typeof x[key] !== 'string') throw new Error('שדה מספרי לא תקין בגיבוי');
+    for (const key of ['purchaseQuantity','purchasePriceNet','unitWeightGrams','yieldPercent','outputQuantity','targetOverride','sellingPrice']) if (x[key] !== undefined && typeof x[key] !== 'string') throw new Error('שדה מספרי לא תקין בגיבוי');
     if (x.archivedAt !== null && x.archivedAt !== undefined && typeof x.archivedAt !== 'string') throw new Error('תאריך ארכיון לא תקין');
   }
   for (const x of d.ingredients) validateIngredient(x);
@@ -116,7 +134,7 @@ export function validateBackup(input) {
   // Allow-list stored fields: never import arbitrary object properties or HTML.
   const pick = (x, fields) => Object.fromEntries(fields.filter(k => x[k] !== undefined).map(k => [k, x[k]]));
   return {
-    ingredients: d.ingredients.map(x => pick(x, ['id','name','category','supplierName','purchaseQuantity','purchaseUnit','purchasePriceNet','yieldPercent','zeroConfirmed','priceUpdatedAt','archivedAt','revision','createdAt','updatedAt'])),
+    ingredients: d.ingredients.map(x => pick(x, ['id','name','category','supplierName','purchaseQuantity','purchaseUnit','purchasePriceNet','unitWeightGrams','yieldPercent','zeroConfirmed','priceUpdatedAt','archivedAt','revision','createdAt','updatedAt'])),
     recipes: d.recipes.map(x => ({ ...pick(x, ['id','name','category','kind','outputQuantity','outputUnit','targetOverride','sellingPrice','notes','archivedAt','revision','createdAt','updatedAt']), items: x.items.map(i => pick(i, ['type','componentId','quantity','unit'])) })),
     settings: pick(d.settings, ['target','taxRate','sellingBasis','rounding'])
   };

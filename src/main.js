@@ -1,7 +1,9 @@
 import './style.css';
 import './design-refresh.css';
+import './component-picker.css';
+import { findComponents } from './component-picker.js';
 import { createIcons, Grape, Utensils, CookingPot, Wheat, Settings, Plus, Search, ArrowLeft, X, Download, Upload, ShieldCheck, WifiOff, Check, Pencil, Copy, Archive, Trash2, CircleHelp, Leaf, ChevronLeft, ChefHat, RefreshCw } from 'lucide';
-import { units, defaults, ingredientCost, recipeCost, pricing, validateIngredient, validateRecipe, validateSettings, validateBackup, dependents, number } from './domain.js';
+import { units, defaults, ingredientCost, ingredientRecipeUnits, recipeCost, pricing, validateIngredient, validateRecipe, validateSettings, validateBackup, dependents, number } from './domain.js';
 import { db, readData, saveRecord, removeRecord, saveSettings, exportBackup, markExport, restoreBackup } from './db.js';
 const icons = { Grape, Utensils, CookingPot, Wheat, Settings, Plus, Search, ArrowLeft, X, Download, Upload, ShieldCheck, WifiOff, Check, Pencil, Copy, Archive, Trash2, CircleHelp, Leaf, ChevronLeft, ChefHat, RefreshCw };
 import { tutorialSteps, shouldShowTutorial, completeTutorial } from './tutorial.js';
@@ -146,34 +148,54 @@ function dialogHead(title, sub = '') { return `<div class="dialog-head"><div><h2
 function newEditor(type, id) {
   const source = id ? (type === 'ingredient' ? data.ingredients : data.recipes).find(x => x.id === id) : null;
   detailId = null;
-  editor = { type, record: source ? structuredClone(source) : type === 'ingredient' ? { id: crypto.randomUUID(), revision: 0, name:'', category:'', supplierName:'', purchaseQuantity:'1', purchaseUnit:'kg', purchasePriceNet:'', yieldPercent:'100', zeroConfirmed:false } : { id:crypto.randomUUID(), revision:0, name:'', category:'', kind:type, outputQuantity:'1', outputUnit:type === 'dish' ? 'portion' : 'g', items:[], targetOverride:'', sellingPrice:'', notes:'' } };
+  editor = { type, record: source ? structuredClone(source) : type === 'ingredient' ? { id: crypto.randomUUID(), revision: 0, name:'', category:'', supplierName:'', purchaseQuantity:'1', purchaseUnit:'kg', purchasePriceNet:'', yieldPercent:'100', unitWeightGrams:'', zeroConfirmed:false } : { id:crypto.randomUUID(), revision:0, name:'', category:'', kind:type, outputQuantity:'1', outputUnit:type === 'dish' ? 'portion' : 'g', items:[], targetOverride:'', sellingPrice:'', notes:'' } };
   dirty = false; drawEditor();
 }
 function drawEditor() {
   const r = editor.record, ingredient = editor.type === 'ingredient', sub = editor.type === 'subrecipe';
   let body;
-  if (ingredient) body = `<div class="fields two">${field('שם חומר הגלם','name',r.name,'required maxlength="120"')}${field('קטגוריה','category',r.category,'maxlength="60"')}${field('כמות באריזה','purchaseQuantity',r.purchaseQuantity,'inputmode="decimal" required')}<label class="field"><span>יחידת אריזה</span><select name="purchaseUnit">${options(r.purchaseUnit)}</select></label>${field('מחיר אריזה לפני מס (₪)','purchasePriceNet',r.purchasePriceNet,'inputmode="decimal" placeholder="אפשר להשלים בהמשך"')}${field('ניצולת שימושית (%)','yieldPercent',r.yieldPercent,'inputmode="decimal" required')}</div><label class="checkbox"><input type="checkbox" name="zeroConfirmed" ${r.zeroConfirmed ? 'checked' : ''}> מחיר אפס מכוון (למשל מים)</label>${field('ספק (לא חובה)','supplierName',r.supplierName,'maxlength="120"')}<p class="hint">הכמויות במתכונים יהיו לאחר ניקוי וקילוף. ניצולת 80% פירושה שמאריזת ק״ג מתקבלים 800 גרם שימושיים.</p><div class="editor-preview" id="cost-preview"></div>`;
+  if (ingredient) body = `<div class="fields two">${field('שם חומר הגלם','name',r.name,'required maxlength="120"')}${field('קטגוריה','category',r.category,'maxlength="60"')}${field('כמות באריזה','purchaseQuantity',r.purchaseQuantity,'inputmode="decimal" required')}<label class="field"><span>יחידת אריזה</span><select name="purchaseUnit">${options(r.purchaseUnit)}</select></label><div id="unit-weight-field" class="unit-weight-field" ${r.purchaseUnit === 'unit' ? '' : 'hidden'}>${field('משקל יחידה בגרמים (לא חובה)','unitWeightGrams',r.unitWeightGrams || '', 'inputmode="decimal" placeholder="למשל 200"')}<p class="hint">משקל של יחידה אחת כפי שנרכשה, לפני ניקוי ופחת. מאפשר להשתמש בגרמים במנה, גם אם באריזה יש כמה יחידות.</p></div>${field('מחיר אריזה לפני מס (₪)','purchasePriceNet',r.purchasePriceNet,'inputmode="decimal" placeholder="אפשר להשלים בהמשך"')}${field('ניצולת שימושית (%)','yieldPercent',r.yieldPercent,'inputmode="decimal" required')}</div><label class="checkbox"><input type="checkbox" name="zeroConfirmed" ${r.zeroConfirmed ? 'checked' : ''}> מחיר אפס מכוון (למשל מים)</label>${field('ספק (לא חובה)','supplierName',r.supplierName,'maxlength="120"')}<p class="hint">הכמויות במתכונים יהיו לאחר ניקוי וקילוף. ניצולת 80% פירושה שמאריזת ק״ג מתקבלים 800 גרם שימושיים.</p><div class="editor-preview" id="cost-preview"></div>`;
   else body = `<div class="fields two">${field('שם '+(sub ? 'מתכון המשנה' : 'המנה'),'name',r.name,'required maxlength="120"')}${field('קטגוריה','category',r.category,'maxlength="60"')}${field(sub ? 'תפוקה סופית שימושית' : 'מספר מנות באצווה','outputQuantity',r.outputQuantity,'inputmode="decimal" required')}${sub ? `<label class="field"><span>יחידת תפוקה</span><select name="outputUnit">${options(r.outputUnit)}</select></label>` : '<div class="field-note">כל הכמויות בהמשך מתייחסות לאצווה כולה.</div>'}</div><div class="section-label"><h3>הרכב ${sub ? 'המתכון' : 'המנה'}</h3><span>${r.items.length} רכיבים</span></div><div class="editor-rows">${r.items.map((row,i) => {
     const comp = (row.type === 'ingredient' ? data.ingredients : data.recipes).find(x => x.id === row.componentId);
     const unit = row.type === 'ingredient' ? comp?.purchaseUnit : comp?.outputUnit;
-    return `<div class="component-row"><div><strong>${esc(comp?.name || 'רכיב חסר')}</strong><small>${row.type === 'recipe' ? 'מתכון משנה' : 'חומר גלם'}</small></div><label><span class="sr-only">כמות ${esc(comp?.name)}</span><input name="qty-${i}" value="${esc(row.quantity)}" inputmode="decimal" required></label><select name="unit-${i}" aria-label="יחידה ${esc(comp?.name)}">${options(row.unit, Object.keys(units).filter(u => units[u].family === units[unit]?.family))}</select><button type="button" class="icon-button danger" data-action="remove-row" data-index="${i}" aria-label="הסרת ${esc(comp?.name)}">${icon('X')}</button></div>`;
-  }).join('') || '<p class="hint">הוסיפי חומר גלם או מתכון משנה כדי להתחיל לחשב.</p>'}</div><div class="add-component"><select id="component-picker" aria-label="בחירת רכיב"><option value="">בחירת רכיב להוספה…</option><optgroup label="חומרי גלם">${data.ingredients.filter(x => !x.archivedAt).sort((a,b)=>a.name.localeCompare(b.name,'he')).map(x => `<option value="ingredient:${esc(x.id)}">${esc(x.name)}</option>`).join('')}</optgroup><optgroup label="מתכוני משנה">${data.recipes.filter(x => x.kind === 'subrecipe' && !x.archivedAt && x.id !== r.id).map(x => `<option value="recipe:${esc(x.id)}">${esc(x.name)}</option>`).join('')}</optgroup></select><button type="button" class="secondary" data-action="add-row">${icon('Plus')}הוספה</button></div>${!data.ingredients.length ? '<p class="hint">כדי להתחיל, סגרי את הטופס והוסיפי חומרי גלם בלשונית המזווה.</p>' : ''}<div class="editor-preview" id="cost-preview"></div>${!sub ? `<div class="section-label"><h3>תמחור</h3></div><div class="fields two">${field('יעד Food Cost ייחודי (%)','targetOverride',r.targetOverride,`inputmode="decimal" placeholder="היעד הכללי: ${esc(data.settings.target)}%"`)}${field(`מחיר קיים לסועד (₪, ${data.settings.sellingBasis === 'gross' ? 'כולל מס' : 'לפני מס'})`,'sellingPrice',r.sellingPrice,'inputmode="decimal" placeholder="לא חובה"')}</div>` : ''}<label class="field"><span>הערות הכנה</span><textarea name="notes" rows="3" maxlength="4000">${esc(r.notes)}</textarea></label>`;
+    return `<div class="component-row"><div><strong>${esc(comp?.name || 'רכיב חסר')}</strong><small>${row.type === 'recipe' ? 'מתכון משנה' : 'חומר גלם'}</small></div><label><span class="sr-only">כמות ${esc(comp?.name)}</span><input name="qty-${i}" value="${esc(row.quantity)}" inputmode="decimal" required></label><select name="unit-${i}" aria-label="יחידה ${esc(comp?.name)}">${options(row.unit, row.type === 'ingredient' && comp ? ingredientRecipeUnits(comp) : Object.keys(units).filter(u => units[u].family === units[unit]?.family))}</select><button type="button" class="icon-button danger" data-action="remove-row" data-index="${i}" aria-label="הסרת ${esc(comp?.name)}">${icon('X')}</button></div>`;
+  }).join('') || '<p class="hint">הוסיפי חומר גלם או מתכון משנה כדי להתחיל לחשב.</p>'}</div>${componentPickerMarkup()}${!data.ingredients.length ? '<p class="hint">כדי להתחיל, סגרי את הטופס והוסיפי חומרי גלם בלשונית המזווה.</p>' : ''}<div class="editor-preview" id="cost-preview"></div>${!sub ? `<div class="section-label"><h3>תמחור</h3></div><div class="fields two">${field('יעד Food Cost ייחודי (%)','targetOverride',r.targetOverride,`inputmode="decimal" placeholder="היעד הכללי: ${esc(data.settings.target)}%"`)}${field(`מחיר קיים לסועד (₪, ${data.settings.sellingBasis === 'gross' ? 'כולל מס' : 'לפני מס'})`,'sellingPrice',r.sellingPrice,'inputmode="decimal" placeholder="לא חובה"')}</div>` : ''}<label class="field"><span>הערות הכנה</span><textarea name="notes" rows="3" maxlength="4000">${esc(r.notes)}</textarea></label>`;
   showDialog(`${dialogHead(r.revision ? 'עריכת '+(ingredient ? 'חומר גלם' : sub ? 'מתכון משנה' : 'מנה') : 'הוספת '+(ingredient ? 'חומר גלם' : sub ? 'מתכון משנה' : 'מנה'), 'נשמר במכשיר שלך, זמין גם ללא רשת')}<form id="editor-form"><div class="dialog-body"><div class="form-error" role="alert"></div>${body}${r.revision ? `<div id="delete-feedback" class="delete-feedback" role="alert" tabindex="-1" hidden></div><div class="record-actions"><button type="button" class="text-button" data-action="archive">${icon('Archive')}${r.archivedAt ? 'הוצאה מארכיון' : 'העברה לארכיון'}</button><button type="button" class="text-button danger" data-action="delete">${icon('Trash2')}מחיקה</button></div>` : ''}</div><div class="dialog-footer"><span id="save-state">${dirty ? 'שינויים שלא נשמרו' : r.revision ? 'נשמר במכשיר' : 'פריט חדש'}</span><button type="button" class="secondary" data-action="close">ביטול</button><button type="submit" class="primary">${icon('Check')}שמירה</button></div></form>`, !ingredient);
   updatePreview();
+}
+function componentResultMarkup(matches) {
+  return matches.length ? matches.map(({ type, record }) => {
+    const detail = type === 'recipe' ? 'מתכון משנה' : record.purchaseUnit === 'unit' && record.unitWeightGrams ? `חומר גלם · יחידה = ${record.unitWeightGrams} גרם` : 'חומר גלם';
+    return `<div role="listitem"><button type="button" class="component-result" data-action="add-row" data-id="${type}:${esc(record.id)}" aria-label="הוספת ${esc(record.name)}"><span class="result-symbol">${icon(type === 'recipe' ? 'CookingPot' : 'Wheat')}</span><span><strong>${esc(record.name)}</strong><small>${esc(detail)}</small></span><span class="result-add">${icon('Plus')}</span></button></div>`;
+  }).join('') : '<p class="component-empty">לא נמצאו רכיבים מתאימים. נסי שם אחר או הוסיפי חומר גלם במסך חומרי הגלם.</p>';
+}
+function componentPickerMarkup() {
+  const matches = findComponents(data, editor.searchQuery || '', editor.record.id);
+  return `<section class="component-picker" aria-label="הוספת רכיבים"><label class="field"><span>חיפוש רכיב להוספה</span><span class="component-search-wrap">${icon('Search')}<input id="component-search" type="search" autocomplete="off" placeholder="שם חומר גלם או מתכון משנה…" value="${esc(editor.searchQuery || '')}" aria-controls="component-results" aria-describedby="component-results-count"></span></label><p id="component-results-count" class="component-count" role="status" aria-live="polite">${matches.length} רכיבים זמינים · לחיצה מוסיפה למתכון</p><div id="component-results" class="component-results" role="list" aria-label="תוצאות חיפוש רכיבים">${componentResultMarkup(matches)}</div></section>`;
+}
+function updateComponentResults() {
+  const matches = findComponents(data, editor.searchQuery || '', editor.record.id);
+  document.querySelector('#component-results').innerHTML = componentResultMarkup(matches);
+  document.querySelector('#component-results-count').textContent = `${matches.length} רכיבים זמינים · לחיצה מוסיפה למתכון`;
+  refreshIcons();
 }
 function collectEditor() {
   const form = document.querySelector('#editor-form'); if (!form || !editor) return;
   const f = new FormData(form), r = editor.record;
-  const fields = editor.type === 'ingredient' ? ['name','category','supplierName','purchaseQuantity','purchaseUnit','purchasePriceNet','yieldPercent'] : ['name','category','outputQuantity','notes', ...(r.kind === 'dish' ? ['targetOverride','sellingPrice'] : ['outputUnit'])];
+  const fields = editor.type === 'ingredient' ? ['name','category','supplierName','purchaseQuantity','purchaseUnit','purchasePriceNet','yieldPercent','unitWeightGrams'] : ['name','category','outputQuantity','notes', ...(r.kind === 'dish' ? ['targetOverride','sellingPrice'] : ['outputUnit'])];
   for (const key of fields) r[key] = String(f.get(key) ?? '').trim();
-  if (editor.type === 'ingredient') r.zeroConfirmed = f.has('zeroConfirmed');
+  if (editor.type === 'ingredient') {
+    r.zeroConfirmed = f.has('zeroConfirmed');
+    if (r.purchaseUnit !== 'unit') r.unitWeightGrams = '';
+    document.querySelector('#unit-weight-field').hidden = r.purchaseUnit !== 'unit';
+  }
   else r.items.forEach((row,i) => { row.quantity = String(f.get(`qty-${i}`) ?? ''); row.unit = String(f.get(`unit-${i}`) ?? row.unit); });
 }
 function updatePreview() {
   const el = document.querySelector('#cost-preview'); if (!el || !editor) return;
   try {
     const r = editor.record;
-    if (editor.type === 'ingredient') { const cost = ingredientCost(r); const base = r.purchaseUnit === 'kg' ? 'g' : r.purchaseUnit === 'l' ? 'ml' : r.purchaseUnit; el.innerHTML = `<span>עלות ל${units[base].label} שימושי</span><strong>${money(cost,3)}</strong>`; }
+    if (editor.type === 'ingredient') { const cost = ingredientCost(r); const base = r.purchaseUnit === 'kg' ? 'g' : r.purchaseUnit === 'l' ? 'ml' : r.purchaseUnit; el.innerHTML = `<div><span>עלות ל${units[base].label} שימושי</span><strong>${money(cost,3)}</strong></div>${r.purchaseUnit === 'unit' && r.unitWeightGrams ? `<div><span>עלות לגרם שימושי</span><strong>${money(cost.div(number(r.unitWeightGrams)),3)}</strong></div>` : ''}`; }
     else { const c = safeCost(r); el.innerHTML = `<div><span>עלות האצווה${c.errors.length ? ' · חלקית' : ''}</span><strong>${money(c.total)}</strong></div><div><span>עלות ל${r.kind === 'dish' ? 'מנה' : units[r.outputUnit]?.label}</span><strong>${money(c.perOutput,r.kind === 'dish' ? 2 : 3)}</strong></div>${c.errors.length ? `<small>${esc(c.errors[0])}</small>` : ''}`; }
   } catch (e) { el.innerHTML = `<span>${esc(e.message)}</span>`; }
 }
@@ -272,7 +294,22 @@ const actions = {
   detail: id => { detailId=id; drawDetail(id); },
   'edit-recipe': id => newEditor(data.recipes.find(x=>x.id===id).kind,id),
   close: closeModal,
-  'add-row': () => { collectEditor(); const value = document.querySelector('#component-picker').value; if (!value) return toast('יש לבחור רכיב',true); const [type, componentId] = value.split(':'); const comp = (type === 'ingredient' ? data.ingredients : data.recipes).find(x=>x.id===componentId); const row = {type,componentId,quantity:'1',unit:type==='ingredient'?comp.purchaseUnit:comp.outputUnit}; const candidate = {...editor.record,items:[...editor.record.items,row]}; try { validateRecipe({...candidate,name:candidate.name || 'טיוטה'},data.recipes,data.ingredients); } catch(e) { return toast(e.message,true); } editor.record.items.push(row); dirty=true; drawEditor(); },
+  'add-row': value => {
+    collectEditor();
+    if (!value) return toast('יש לבחור רכיב', true);
+    const [type, componentId] = value.split(':');
+    const comp = (type === 'ingredient' ? data.ingredients : data.recipes).find(x => x.id === componentId);
+    if (!comp || comp.archivedAt) return toast('הרכיב אינו זמין להוספה', true);
+    const row = { type, componentId, quantity: '1', unit: type === 'ingredient' ? (comp.purchaseUnit === 'unit' && comp.unitWeightGrams ? 'g' : comp.purchaseUnit) : comp.outputUnit };
+    const candidate = { ...editor.record, items: [...editor.record.items, row] };
+    try { validateRecipe({ ...candidate, name: candidate.name || 'טיוטה' }, data.recipes, data.ingredients); }
+    catch (error) { return toast(error.message, true); }
+    editor.record.items.push(row);
+    editor.searchQuery = '';
+    dirty = true;
+    drawEditor();
+    document.querySelector('#component-search').focus();
+  },
   'remove-row': (_,el) => { collectEditor(); editor.record.items.splice(Number(el.dataset.index),1); dirty=true; drawEditor(); },
   duplicate: id => { const source = data.recipes.find(x=>x.id===id); newEditor(source.kind,id); editor.record.id=crypto.randomUUID(); editor.record.revision=0; editor.record.name='עותק של '+source.name; editor.record.archivedAt=null; dirty=true; drawEditor(); },
   archive: async () => { const table = editor.type === 'ingredient' ? 'ingredients' : 'recipes'; const original = data[table].find(x=>x.id===editor.record.id); const refs=dependents(original.id,table==='ingredients'?'ingredient':'recipe',data.recipes); if (!(await confirmAction(original.archivedAt ? 'להחזיר מהארכיון?' : 'להעביר לארכיון?',refs.length ? `הפריט ימשיך להשתתף בחישוב ${refs.length} מתכונים ומנות קיימים. עריכות שלא נשמרו בטופס לא ייכללו.` : 'הפריט יוסתר מבחירה חדשה. עריכות שלא נשמרו בטופס לא ייכללו.'))) return; await saveRecord(table,{...original,archivedAt:original.archivedAt ? null : new Date().toISOString()}); editor=null; dirty=false; await refresh(); toast('הארכיון עודכן'); },
@@ -306,14 +343,23 @@ const actions = {
 };
 document.addEventListener('click',async e=>{ const button=e.target.closest('[data-action]'); if(!button) return; const action=actions[button.dataset.action]; if(!action) return; button.disabled=true; try {await action(button.dataset.id,button);} catch(error){toast(error.message || 'הפעולה נכשלה. הנתונים לא אופסו',true);} finally{button.disabled=false;} });
 document.addEventListener('input',e=>{
+  if(e.target.id === 'component-search' && editor) { editor.searchQuery = e.target.value; updateComponentResults(); return; }
   if(e.target.closest('#settings-form')) dirty=true;
   if(e.target.closest('#editor-form')) {dirty=true; collectEditor(); document.querySelector('#save-state').textContent='שינויים שלא נשמרו'; updatePreview();}
   if(e.target.id==='search') {query=e.target.value; render(); document.querySelector('#search').focus();}
 });
+document.addEventListener('keydown', e => {
+  if (e.target.id === 'component-search' && e.key === 'Enter') {
+    e.preventDefault();
+    const first = document.querySelector('#component-results .component-result');
+    if (first) first.click();
+    else toast('לא נמצאו רכיבים מתאימים', true);
+  }
+});
 document.addEventListener('change',async e=>{
   if(e.target.id==='archive-filter') {showArchive=e.target.checked;render();}
   if(e.target.id==='category-filter') {category=e.target.value;render();}
-  if(e.target.closest('#editor-form')) {dirty=true;collectEditor();updatePreview();}
+  if(e.target.closest('#editor-form') && e.target.id !== 'component-search') {dirty=true;collectEditor();updatePreview();}
   if(e.target.id==='backup-file') {
     try {
       const file=e.target.files[0]; if(!file) return;
