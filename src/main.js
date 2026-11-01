@@ -1,3 +1,5 @@
+import { createAppUpdates } from './app-updates.js';
+import { APP_VERSION, BUILD_ID } from './version.js';
 import './style.css';
 import './design-refresh.css';
 import './component-picker.css';
@@ -11,8 +13,10 @@ import { createDialogScrollManager } from './dialog-scroll.js';
 const modalScroll = createDialogScrollManager({ document, window });
 const app = document.querySelector('#app');
 let tutorialIndex = null;
-let data = { ingredients: [], recipes: [], settings: defaults, meta: {} }, route = 'dishes', query = '', category = '', showArchive = false, editor = null, detailId = null, dirty = false, pendingRestore = null, registration, offlineReady = false;
+let data = { ingredients: [], recipes: [], settings: defaults, meta: {} }, route = 'dishes', query = '', category = '', showArchive = false, editor = null, detailId = null, dirty = false, pendingRestore = null, offlineReady = false;
 let toastTimer;
+let updateState = { status: import.meta.env.PROD ? 'starting' : 'development', offlineReady: false };
+const updater = createAppUpdates({ window, document, navigator, baseUrl: import.meta.env.BASE_URL, isDirty: () => dirty, reload: () => location.reload(), onState: state => { updateState = state; offlineReady = state.offlineReady; syncUpdateUI(); } });
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
 const icon = name => `<i data-lucide="${name.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase()}" aria-hidden="true"></i>`;
 const money = (v, precision = 2) => v === null || v === undefined ? '—' : new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', minimumFractionDigits: precision, maximumFractionDigits: precision }).format(Number(v));
@@ -45,9 +49,9 @@ function labelForKind() { return route === 'ingredients' ? 'חומר גלם' : r
 function currentRecords() { return route === 'ingredients' ? data.ingredients : data.recipes.filter(x => x.kind === (route === 'subrecipes' ? 'subrecipe' : 'dish')); }
 function nav() { return [['dishes','Utensils','המנות שלי'],['subrecipes','CookingPot','מתכוני משנה'],['ingredients','Wheat','חומרי גלם'],['settings','Settings','הגדרות וגיבוי']].map(([id, i, text]) => `<a href="#/${id}" class="nav-link ${route === id ? 'active' : ''}" ${route === id ? 'aria-current="page"' : ''}>${icon(i)}<span>${text}</span>${route === id ? '<b></b>' : ''}</a>`).join(''); }
 function render() {
-  app.innerHTML = `<aside class="sidebar"><a class="brand" href="#/dishes"><span class="brand-mark">${icon('Grape')}</span><span><strong>כרם</strong><small>FOOD COST STUDIO</small></span></a><div class="sidebar-label">מהמטבח, עד לתפריט</div><nav aria-label="ניווט ראשי">${nav()}</nav><div class="sidebar-foot"><div class="local-note">${icon('ShieldCheck')}<span><strong>המידע נשאר אצלך</strong><small>שמירה מקומית במכשיר</small></span></div><span class="version">כרם · גרסה 1.0</span></div></aside>
+  app.innerHTML = `<aside class="sidebar"><a class="brand" href="#/dishes"><span class="brand-mark">${icon('Grape')}</span><span><strong>כרם</strong><small>FOOD COST STUDIO</small></span></a><div class="sidebar-label">מהמטבח, עד לתפריט</div><nav aria-label="ניווט ראשי">${nav()}</nav><div class="sidebar-foot"><div class="local-note">${icon('ShieldCheck')}<span><strong>המידע נשאר אצלך</strong><small>שמירה מקומית במכשיר</small></span></div><span class="version">כרם · גרסה ${APP_VERSION}</span></div></aside>
   <div class="workspace"><header class="topbar"><span class="breadcrumb">היקב שלי <span>/</span> ${route === 'settings' ? 'הגדרות וגיבוי' : route === 'ingredients' ? 'חומרי גלם' : route === 'subrecipes' ? 'מתכוני משנה' : 'המנות שלי'}</span><div class="connection ${navigator.onLine ? '' : 'offline'}">${icon(navigator.onLine ? 'ShieldCheck' : 'WifiOff')}<span>${!navigator.onLine ? 'עבודה ללא רשת' : offlineReady ? 'מוכן לעבודה ללא רשת' : 'הנתונים נשמרים במכשיר'}</span></div></header><main id="main">${route === 'settings' ? settingsView() : listView()}</main><footer class="page-footer"><span>כל מנה טובה מתחילה בפרטים הקטנים.</span><span>כרם · תמחור עם מחשבה</span></footer></div><nav class="mobile-nav" aria-label="ניווט נייד">${nav()}</nav><dialog id="modal"></dialog>`;
-  refreshIcons(); if (tutorialIndex !== null) drawTutorial(); else if (editor) drawEditor(); else if (detailId) drawDetail(detailId); if (registration?.waiting) showUpdateButton(); modalScroll.sync();
+  refreshIcons(); if (tutorialIndex !== null) drawTutorial(); else if (editor) drawEditor(); else if (detailId) drawDetail(detailId); syncUpdateUI(); modalScroll.sync();
 }
 function listView() {
   const ingredients = route === 'ingredients', subs = route === 'subrecipes', all = currentRecords(), active = all.filter(x => !x.archivedAt);
@@ -103,7 +107,7 @@ function field(label, name, value, extra = '') { return `<label class="field"><s
 function options(selected, subset = Object.keys(units)) { return subset.map(u => `<option value="${u}" ${u === selected ? 'selected' : ''}>${units[u].label}</option>`).join(''); }
 function settingsView() {
   const s = data.settings;
-  return `<section class="page-heading"><div><div class="eyebrow">סביבת העבודה שלך</div><h1>הכול במקום בטוח.</h1><p>העדפות תמחור, שמירה מקומית ועותק לדרך.</p></div></section><section class="tutorial-entry"><span class="guide-icon">${icon('CircleHelp')}</span><div><h2>איך משתמשים בכרם?</h2><p>מדריך קצר, מחומרי הגלם ועד לתמחור ולגיבוי.</p></div><button class="secondary" data-action="tutorial-open">פתיחת המדריך ${icon('ArrowLeft')}</button></section><div class="settings-grid"><section class="panel"><div class="panel-title">${icon('Settings')}<h2>העדפות תמחור</h2></div><form id="settings-form"><div class="form-error" role="alert"></div><div class="fields two">${field('יעד Food Cost כללי (%)','target',s.target,'inputmode="decimal" required')}${field('עיגול מחיר מוצע כלפי מעלה (₪)','rounding',s.rounding,'inputmode="decimal" required')}</div><label class="field"><span>מחירי המכירה לסועד</span><select name="sellingBasis"><option value="net" ${s.sellingBasis === 'net' ? 'selected' : ''}>לפני מס</option><option value="gross" ${s.sellingBasis === 'gross' ? 'selected' : ''}>כולל מס</option></select></label>${field('שיעור מס שהגדרת (%)','taxRate',s.taxRate,'inputmode="decimal" required')}<p class="hint">עלויות חומרי גלם מוזנות לפני מס. שינוי בסיס המחיר ימיר מחירים קיימים תוך שמירה על ערכם לפני מס.</p><button class="primary" type="submit">${icon('Check')}שמירת העדפות</button></form></section><section class="panel"><div class="panel-title">${icon('ShieldCheck')}<h2>גיבוי ושחזור</h2></div><p>הנתונים נשמרים בדפדפן במכשיר הזה. קובץ גיבוי מאפשר לשחזר אותם או להעביר אותם לטלפון אחר.</p><div class="backup-date"><span>קובץ גיבוי אחרון שנוצר</span><strong>${date(data.meta.exportedAt)}</strong></div><button class="primary full" data-action="export">${icon('Download')}יצירת גיבוי JSON</button><button class="secondary full" data-action="import">${icon('Upload')}שחזור מקובץ גיבוי</button><input type="file" id="backup-file" accept=".json,application/json" hidden><p class="hint">שחזור מחליף את כל הנתונים הקיימים. הקובץ מכיל את מחירי הרכש והמתכונים שלך; שמרי אותו במקום מתאים.</p></section><section class="panel full-span"><div class="panel-title">${icon('Leaf')}<h2>אפליקציה קטנה, עצמאות מלאה</h2></div><div class="info-columns"><div><h3>גם בלי אינטרנט</h3><p>${offlineReady ? 'האפליקציה מוכנה לעבודה ללא רשת.' : 'הכנה לעבודה ללא רשת תושלם לאחר הפרסום וטעינה מוצלחת.'} הוספה למסך הבית זמינה דרך תפריט הדפדפן.</p></div><div><h3>המידע במכשיר שלך</h3><p>אין חשבון משתמש ואין סנכרון. ניקוי נתוני האתר עלול למחוק את המידע, ולכן כדאי ליצור גיבוי באופן קבוע.</p><button class="text-button" data-action="persist">בקשת אחסון מתמיד ${icon('ArrowLeft')}</button></div><div><h3>מה העלות כוללת?</h3><p>חומרי גלם בלבד. היתרה ממחיר המכירה אינה רווח נקי ואינה כוללת עבודה, תקורות והוצאות נוספות.</p></div></div></section></div>`;
+  return `<section class="page-heading"><div><div class="eyebrow">סביבת העבודה שלך</div><h1>הכול במקום בטוח.</h1><p>העדפות תמחור, שמירה מקומית ועותק לדרך.</p></div></section>${updateSettingsView()}<section class="tutorial-entry"><span class="guide-icon">${icon('CircleHelp')}</span><div><h2>איך משתמשים בכרם?</h2><p>מדריך קצר, מחומרי הגלם ועד לתמחור ולגיבוי.</p></div><button class="secondary" data-action="tutorial-open">פתיחת המדריך ${icon('ArrowLeft')}</button></section><div class="settings-grid"><section class="panel"><div class="panel-title">${icon('Settings')}<h2>העדפות תמחור</h2></div><form id="settings-form"><div class="form-error" role="alert"></div><div class="fields two">${field('יעד Food Cost כללי (%)','target',s.target,'inputmode="decimal" required')}${field('עיגול מחיר מוצע כלפי מעלה (₪)','rounding',s.rounding,'inputmode="decimal" required')}</div><label class="field"><span>מחירי המכירה לסועד</span><select name="sellingBasis"><option value="net" ${s.sellingBasis === 'net' ? 'selected' : ''}>לפני מס</option><option value="gross" ${s.sellingBasis === 'gross' ? 'selected' : ''}>כולל מס</option></select></label>${field('שיעור מס שהגדרת (%)','taxRate',s.taxRate,'inputmode="decimal" required')}<p class="hint">עלויות חומרי גלם מוזנות לפני מס. שינוי בסיס המחיר ימיר מחירים קיימים תוך שמירה על ערכם לפני מס.</p><button class="primary" type="submit">${icon('Check')}שמירת העדפות</button></form></section><section class="panel"><div class="panel-title">${icon('ShieldCheck')}<h2>גיבוי ושחזור</h2></div><p>הנתונים נשמרים בדפדפן במכשיר הזה. קובץ גיבוי מאפשר לשחזר אותם או להעביר אותם לטלפון אחר.</p><div class="backup-date"><span>קובץ גיבוי אחרון שנוצר</span><strong>${date(data.meta.exportedAt)}</strong></div><button class="primary full" data-action="export">${icon('Download')}יצירת גיבוי JSON</button><button class="secondary full" data-action="import">${icon('Upload')}שחזור מקובץ גיבוי</button><input type="file" id="backup-file" accept=".json,application/json" hidden><p class="hint">שחזור מחליף את כל הנתונים הקיימים. הקובץ מכיל את מחירי הרכש והמתכונים שלך; שמרי אותו במקום מתאים.</p></section><section class="panel full-span"><div class="panel-title">${icon('Leaf')}<h2>אפליקציה קטנה, עצמאות מלאה</h2></div><div class="info-columns"><div><h3>גם בלי אינטרנט</h3><p data-offline-copy>${offlineReady ? 'האפליקציה מוכנה לעבודה ללא רשת.' : 'הכנה לעבודה ללא רשת תושלם לאחר הפרסום וטעינה מוצלחת.'} הוספה למסך הבית זמינה דרך תפריט הדפדפן.</p></div><div><h3>המידע במכשיר שלך</h3><p>אין חשבון משתמש ואין סנכרון. ניקוי נתוני האתר עלול למחוק את המידע, ולכן כדאי ליצור גיבוי באופן קבוע.</p><button class="text-button" data-action="persist">בקשת אחסון מתמיד ${icon('ArrowLeft')}</button></div><div><h3>מה העלות כוללת?</h3><p>חומרי גלם בלבד. היתרה ממחיר המכירה אינה רווח נקי ואינה כוללת עבודה, תקורות והוצאות נוספות.</p></div></div></section></div>`;
 }
 function drawTutorial() {
   const step = tutorialSteps[tutorialIndex];
@@ -358,9 +362,10 @@ const actions = {
   'confirm-restore': async () => { const pending=pendingRestore; if(!pending) return; await restoreBackup(pending.input,pending.revision); pendingRestore=null; modalScroll.close(document.querySelector('#modal')); await refresh(); toast('הגיבוי שוחזר בהצלחה'); },
   demo: loadDemo,
   persist: async () => { const granted = await navigator.storage?.persist?.(); toast(granted ? 'הדפדפן אישר אחסון מתמיד. עדיין מומלץ לגבות' : 'לא ניתן לאשר אחסון מתמיד בדפדפן הזה. אפשר להמשיך ולגבות כרגיל'); },
-  update: async () => { if(dirty && !(await confirmAction('לטעון גרסה חדשה?', 'השינויים שלא נשמרו בטופס יאבדו.', 'טעינת הגרסה'))) return; dirty=false; registration.waiting?.postMessage({type:'SKIP_WAITING'}); }
+  'check-updates': () => updater.check({ force: true }),
+  update: () => { if (updater.apply() === 'blocked') toast('יש לשמור את השינויים הפתוחים לפני טעינת העדכון', true); }
 };
-document.addEventListener('click',async e=>{ const button=e.target.closest('[data-action]'); if(!button) return; const action=actions[button.dataset.action]; if(!action) return; button.disabled=true; try {await action(button.dataset.id,button);} catch(error){toast(error.message || 'הפעולה נכשלה. הנתונים לא אופסו',true);} finally{button.disabled=false;} });
+document.addEventListener('click',async e=>{ const button=e.target.closest('[data-action]'); if(!button) return; const action=actions[button.dataset.action]; if(!action) return; button.disabled=true; try {await action(button.dataset.id,button);} catch(error){toast(error.message || 'הפעולה נכשלה. הנתונים לא אופסו',true);} finally{button.disabled=false;if(button.dataset.action==='check-updates')syncUpdateUI();} });
 document.addEventListener('input',e=>{
   if (e.target.hasAttribute('data-usage-mode')) return;
   if(e.target.id === 'component-search' && editor) { editor.searchQuery = e.target.value; updateComponentResults(); return; }
@@ -377,6 +382,7 @@ document.addEventListener('keydown', e => {
   }
 });
 document.addEventListener('change',async e=>{
+  if (e.target.closest('#settings-form')) dirty = true;
   if (e.target.hasAttribute('data-usage-mode') && editor) {
     collectEditor();
     const index = Number(e.target.dataset.usageMode);
@@ -431,18 +437,22 @@ document.addEventListener('submit',async e=>{
 document.addEventListener('cancel',e=>{if(e.target.id==='modal'){e.preventDefault();closeModal();}},true);
 window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue='';}});
 window.addEventListener('hashchange',async()=>{if(editor || detailId || dirty) await closeModal(); if(editor || dirty) {history.replaceState(null,'',`#/${route}`);return;} pendingRestore=null;query='';category='';showArchive=false;setRoute();});
-window.addEventListener('online',()=>{if(!dirty)render();}); window.addEventListener('offline',()=>{if(!dirty)render();});
 function setRoute(){const next=location.hash.split('/')[1];route=['dishes','ingredients','subrecipes','settings'].includes(next)?next:'dishes';render();}
-function showUpdateButton(){if(!document.querySelector('[data-action="update"]')){const b=document.createElement('button');b.className='update-button secondary';b.dataset.action='update';b.textContent='גרסה חדשה מוכנה · עדכון';document.querySelector('.topbar')?.append(b);}}
-async function initWorker(){
-  if(!('serviceWorker' in navigator) || !import.meta.env.PROD) return;
-  try {
-    registration=await navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`,{scope:import.meta.env.BASE_URL});
-    let reloading=false; const hadController=!!navigator.serviceWorker.controller;
-    navigator.serviceWorker.addEventListener('controllerchange',()=>{if(hadController && !reloading && !dirty){reloading=true;location.reload();} else {offlineReady=true; if(!editor && !detailId) render();}});
-    registration.addEventListener('updatefound',()=>{const worker=registration.installing;worker?.addEventListener('statechange',()=>{if(worker.state==='installed' && navigator.serviceWorker.controller) showUpdateButton();});});
-    const ready=await navigator.serviceWorker.ready; offlineReady=!!ready.active;
-    if(!editor && !detailId) render(); if(registration.waiting) showUpdateButton();
-  } catch {toast('הכנה לעבודה ללא רשת לא הושלמה. אפשר לנסות בטעינה הבאה',true);}
+const updateLabels = { starting:'מכין בדיקת עדכונים…', checking:'בודק אם קיימת גרסה חדשה…', downloading:'מוריד גרסה חדשה. אפשר להמשיך לעבוד.', ready:'גרסה חדשה מוכנה לטעינה', 'up-to-date':'הגרסה מעודכנת', offline:'אין חיבור לרשת. אפשר להמשיך לעבוד ולבדוק שוב לאחר החיבור.', error:'בדיקת העדכון לא הושלמה. אפשר לנסות שוב.', unsupported:'הדפדפן הזה אינו תומך בעדכונים לעבודה ללא רשת.', development:'בדיקת עדכונים זמינה בגרסה המפורסמת.', applying:'טוען את הגרסה החדשה…' };
+function updateSettingsView() {
+  return '<section class="panel app-updates"><div class="panel-title">'+icon('RefreshCw')+'<h2>גרסה ועדכונים</h2></div><p>הגרסה במכשיר: <b dir="ltr">'+APP_VERSION+' · '+BUILD_ID+'</b></p><p data-update-status role="status" aria-live="polite"></p><p data-update-checked class="hint"></p><div class="update-actions"><button class="secondary" data-action="check-updates">בדיקת עדכונים</button><button class="primary update-apply" data-action="update" hidden>טעינת הגרסה החדשה</button></div><p class="hint">העדכון שומר על חומרי הגלם והמנות במכשיר. יש לשמור שינויים פתוחים לפני טעינתו.</p></section>';
 }
-try {await refresh();setRoute();if(await shouldShowTutorial()){tutorialIndex=0;drawTutorial();}initWorker();} catch(error){app.innerHTML=`<main class="fatal"><h1>לא ניתן לפתוח את האחסון המקומי</h1><p>אפשר לנסות לפתוח את האתר בדפדפן רגיל ולוודא שאחסון אתרים מותר. הנתונים לא אופסו.</p><p>${esc(error.message)}</p><button onclick="location.reload()">ניסיון נוסף</button></main>`;}
+function syncUpdateUI() {
+  const ready = updateState.status === 'ready';
+  document.querySelectorAll('[data-update-status]').forEach(el => { el.textContent = updateLabels[updateState.status]; });
+  document.querySelectorAll('[data-update-checked]').forEach(el => { el.textContent = updateState.lastChecked ? 'בדיקה אחרונה: '+new Date(updateState.lastChecked).toLocaleString('he-IL') : ''; });
+  document.querySelectorAll('.update-apply').forEach(el => { el.hidden = !ready; });
+  document.querySelectorAll('[data-action="check-updates"]').forEach(el => { el.disabled = ['starting','checking','downloading','applying','unsupported','development'].includes(updateState.status); });
+  const current = document.querySelector('.update-button');
+  if (ready && !current) { const button = document.createElement('button'); button.className = 'update-button secondary'; button.dataset.action = 'update'; button.textContent = 'גרסה חדשה מוכנה · עדכון'; document.querySelector('.topbar')?.append(button); }
+  else if (!ready) current?.remove();
+  document.querySelectorAll('[data-offline-copy]').forEach(el => { el.textContent = (offlineReady ? 'האפליקציה מוכנה לעבודה ללא רשת.' : 'הכנה לעבודה ללא רשת תושלם לאחר טעינה מוצלחת עם אינטרנט.') + ' הוספה למסך הבית זמינה דרך תפריט הדפדפן.'; });
+  const connection = document.querySelector('.connection');
+  if (connection) { connection.classList.toggle('offline', !navigator.onLine); connection.querySelector('span').textContent = !navigator.onLine ? 'עבודה ללא רשת' : offlineReady ? 'מוכן לעבודה ללא רשת' : 'הנתונים נשמרים במכשיר'; }
+}
+try {await refresh();setRoute();if(await shouldShowTutorial()){tutorialIndex=0;drawTutorial();}if(import.meta.env.PROD) void updater.start();} catch(error){app.innerHTML=`<main class="fatal"><h1>לא ניתן לפתוח את האחסון המקומי</h1><p>אפשר לנסות לפתוח את האתר בדפדפן רגיל ולוודא שאחסון אתרים מותר. הנתונים לא אופסו.</p><p>${esc(error.message)}</p><button onclick="location.reload()">ניסיון נוסף</button></main>`;}

@@ -2,6 +2,11 @@ import { defineConfig } from 'vite';
 import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
+import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+const appVersion = JSON.parse(readFileSync(new URL('./package.json', import.meta.url))).version;
+let buildId = process.env.GITHUB_SHA?.slice(0, 7);
+if (!buildId) { try { buildId = execFileSync('git', ['rev-parse', '--short', 'HEAD'], { encoding: 'utf8' }).trim(); } catch { buildId = 'local'; } }
 import { serviceWorkerSource } from './scripts/service-worker.js';
 function offlineBundle() {
   return { name: 'kerem-offline', async closeBundle() {
@@ -14,4 +19,4 @@ function offlineBundle() {
     await writeFile('dist/sw.js', serviceWorkerSource(urls, hash.digest('hex').slice(0,16)));
   }};
 }
-export default defineConfig({ base: '/FoodCost/', plugins: [offlineBundle()], build: { target: 'es2022' }, test: { include: ['tests/**/*.test.js'] } });
+export default defineConfig({ define: { __APP_VERSION__: JSON.stringify(appVersion), __BUILD_ID__: JSON.stringify(buildId) }, base: '/FoodCost/', plugins: [offlineBundle()], build: { target: 'es2022' }, test: { include: ['tests/**/*.test.js'] } });

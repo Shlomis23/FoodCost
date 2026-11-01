@@ -1,3 +1,4 @@
+import { APP_VERSION } from './version.js';
 import Dexie from 'dexie';
 import Decimal from 'decimal.js';
 import { defaults, validateBackup, validateIngredient, validateRecipe, validateSettings } from './domain.js';
@@ -48,7 +49,7 @@ export async function saveSettings(settings, expectedRevision) {
 }
 export async function exportBackup() {
   const data = await readData();
-  return { format: 'winery-food-cost', schemaVersion: 2, appVersion: '1.0.0', exportedAt: new Date().toISOString(), data: { ingredients: data.ingredients, recipes: data.recipes, settings: data.settings }, dataRevision: data.meta.dataRevision || 0 };
+  return { format: 'winery-food-cost', schemaVersion: 2, appVersion: APP_VERSION, exportedAt: new Date().toISOString(), data: { ingredients: data.ingredients, recipes: data.recipes, settings: data.settings }, dataRevision: data.meta.dataRevision || 0 };
 }
 export async function markExport(revision) { await db.transaction('rw', db.meta, async () => { const meta = (await db.meta.get('state'))?.value || {}; await db.meta.put({ key: 'state', value: { ...meta, exportedAt: new Date().toISOString(), exportedRevision: revision } }); }); }
 export async function restoreBackup(input, expectedRevision) {
