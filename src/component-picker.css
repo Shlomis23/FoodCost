@@ -20,3 +20,24 @@
 .result-symbol svg, .result-add svg { width: 17px; height: 17px; }
 .component-empty { font-size: 13px; line-height: 1.9; padding: 16px; color: #76685e; }
 @media (max-width: 520px) { .component-picker { padding: 12px; } .component-result { padding: 11px 9px; gap: 8px; } .component-count { font-size: 11px; } }
+
+.unit-usage-row { padding: 16px; margin-bottom: 15px; border: 1px solid #ddd2cb; border-radius: 11px; background: #faf7f1; }
+.usage-row-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.usage-row-heading strong { display: block; font-size: 15px; font-weight: 500; line-height: 1.7; overflow-wrap: anywhere; }
+.usage-row-heading small { display: block; font-size: 12px; color: #75665a; line-height: 1.7; margin-top: 4px; }
+.usage-modes { border: 0; padding: 0; margin: 0 0 15px; display: grid; grid-template-columns: 1fr 1fr; gap: 7px; min-width: 0; }
+.usage-modes legend { padding: 0; font-size: 12px; color: #6e6158; margin-bottom: 9px; }
+.usage-mode-option { position: relative; min-width: 0; cursor: pointer; }
+.usage-mode-option input { position: absolute; width: 1px; height: 1px; min-height: 1px; padding: 0; margin: 0; clip-path: inset(50%); overflow: hidden; }
+.usage-mode-option > span { display: flex; justify-content: center; align-items: center; text-align: center; min-height: 44px; padding: 8px; border: 1px solid var(--line); border-radius: 7px; font-size: 13px; line-height: 1.6; background: #fffefa; color: #6e6158; }
+.usage-mode-option input:checked + span { border-color: var(--wine); background: #eee4e9; color: var(--wine); font-weight: 600; }
+.usage-mode-option input:focus-visible + span { outline: 3px solid #b99c68; outline-offset: 2px; }
+.usage-mode-option input:disabled + span { color: #91887e; background: #eeebe5; border-style: dashed; cursor: not-allowed; }
+.usage-quantity { margin-bottom: 8px; }
+.usage-quantity > span:first-child { font-size: 13px; color: #5f534b; line-height: 1.7; }
+.usage-input-wrap { position: relative; display: flex; align-items: center; }
+.usage-input-wrap > input { width: 100%; font-size: 18px; padding-left: 72px; }
+.usage-input-wrap > span { position: absolute; left: 13px; font-size: 13px; color: #75665a; }
+.usage-note, .usage-weight-missing { font-size: 12px; line-height: 1.8; color: #78695b; }
+.usage-weight-missing { padding: 11px; margin-top: 11px; border-radius: 7px; background: #f8eddc; color: #865b30; }
+@media (max-width: 520px) { .unit-usage-row { padding: 13px; } .usage-mode-option > span { font-size: 12px; padding: 8px 5px; } }

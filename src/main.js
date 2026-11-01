@@ -3,7 +3,7 @@ import './design-refresh.css';
 import './component-picker.css';
 import { findComponents } from './component-picker.js';
 import { createIcons, Grape, Utensils, CookingPot, Wheat, Settings, Plus, Search, ArrowLeft, X, Download, Upload, ShieldCheck, WifiOff, Check, Pencil, Copy, Archive, Trash2, CircleHelp, Leaf, ChevronLeft, ChefHat, RefreshCw } from 'lucide';
-import { units, defaults, ingredientCost, ingredientRecipeUnits, recipeCost, pricing, validateIngredient, validateRecipe, validateSettings, validateBackup, dependents, number } from './domain.js';
+import { units, defaults, ingredientCost, ingredientRecipeUnits, switchIngredientUsage, recipeCost, pricing, validateIngredient, validateRecipe, validateSettings, validateBackup, dependents, number } from './domain.js';
 import { db, readData, saveRecord, removeRecord, saveSettings, exportBackup, markExport, restoreBackup } from './db.js';
 const icons = { Grape, Utensils, CookingPot, Wheat, Settings, Plus, Search, ArrowLeft, X, Download, Upload, ShieldCheck, WifiOff, Check, Pencil, Copy, Archive, Trash2, CircleHelp, Leaf, ChevronLeft, ChefHat, RefreshCw };
 import { tutorialSteps, shouldShowTutorial, completeTutorial } from './tutorial.js';
@@ -155,13 +155,30 @@ function drawEditor() {
   const r = editor.record, ingredient = editor.type === 'ingredient', sub = editor.type === 'subrecipe';
   let body;
   if (ingredient) body = `<div class="fields two">${field('שם חומר הגלם','name',r.name,'required maxlength="120"')}${field('קטגוריה','category',r.category,'maxlength="60"')}${field('כמות באריזה','purchaseQuantity',r.purchaseQuantity,'inputmode="decimal" required')}<label class="field"><span>יחידת אריזה</span><select name="purchaseUnit">${options(r.purchaseUnit)}</select></label><div id="unit-weight-field" class="unit-weight-field" ${r.purchaseUnit === 'unit' ? '' : 'hidden'}>${field('משקל יחידה בגרמים (לא חובה)','unitWeightGrams',r.unitWeightGrams || '', 'inputmode="decimal" placeholder="למשל 200"')}<p class="hint">משקל של יחידה אחת כפי שנרכשה, לפני ניקוי ופחת. מאפשר להשתמש בגרמים במנה, גם אם באריזה יש כמה יחידות.</p></div>${field('מחיר אריזה לפני מס (₪)','purchasePriceNet',r.purchasePriceNet,'inputmode="decimal" placeholder="אפשר להשלים בהמשך"')}${field('ניצולת שימושית (%)','yieldPercent',r.yieldPercent,'inputmode="decimal" required')}</div><label class="checkbox"><input type="checkbox" name="zeroConfirmed" ${r.zeroConfirmed ? 'checked' : ''}> מחיר אפס מכוון (למשל מים)</label>${field('ספק (לא חובה)','supplierName',r.supplierName,'maxlength="120"')}<p class="hint">הכמויות במתכונים יהיו לאחר ניקוי וקילוף. ניצולת 80% פירושה שמאריזת ק״ג מתקבלים 800 גרם שימושיים.</p><div class="editor-preview" id="cost-preview"></div>`;
-  else body = `<div class="fields two">${field('שם '+(sub ? 'מתכון המשנה' : 'המנה'),'name',r.name,'required maxlength="120"')}${field('קטגוריה','category',r.category,'maxlength="60"')}${field(sub ? 'תפוקה סופית שימושית' : 'מספר מנות באצווה','outputQuantity',r.outputQuantity,'inputmode="decimal" required')}${sub ? `<label class="field"><span>יחידת תפוקה</span><select name="outputUnit">${options(r.outputUnit)}</select></label>` : '<div class="field-note">כל הכמויות בהמשך מתייחסות לאצווה כולה.</div>'}</div><div class="section-label"><h3>הרכב ${sub ? 'המתכון' : 'המנה'}</h3><span>${r.items.length} רכיבים</span></div><div class="editor-rows">${r.items.map((row,i) => {
-    const comp = (row.type === 'ingredient' ? data.ingredients : data.recipes).find(x => x.id === row.componentId);
-    const unit = row.type === 'ingredient' ? comp?.purchaseUnit : comp?.outputUnit;
-    return `<div class="component-row"><div><strong>${esc(comp?.name || 'רכיב חסר')}</strong><small>${row.type === 'recipe' ? 'מתכון משנה' : 'חומר גלם'}</small></div><label><span class="sr-only">כמות ${esc(comp?.name)}</span><input name="qty-${i}" value="${esc(row.quantity)}" inputmode="decimal" required></label><select name="unit-${i}" aria-label="יחידה ${esc(comp?.name)}">${options(row.unit, row.type === 'ingredient' && comp ? ingredientRecipeUnits(comp) : Object.keys(units).filter(u => units[u].family === units[unit]?.family))}</select><button type="button" class="icon-button danger" data-action="remove-row" data-index="${i}" aria-label="הסרת ${esc(comp?.name)}">${icon('X')}</button></div>`;
-  }).join('') || '<p class="hint">הוסיפי חומר גלם או מתכון משנה כדי להתחיל לחשב.</p>'}</div>${componentPickerMarkup()}${!data.ingredients.length ? '<p class="hint">כדי להתחיל, סגרי את הטופס והוסיפי חומרי גלם בלשונית המזווה.</p>' : ''}<div class="editor-preview" id="cost-preview"></div>${!sub ? `<div class="section-label"><h3>תמחור</h3></div><div class="fields two">${field('יעד Food Cost ייחודי (%)','targetOverride',r.targetOverride,`inputmode="decimal" placeholder="היעד הכללי: ${esc(data.settings.target)}%"`)}${field(`מחיר קיים לסועד (₪, ${data.settings.sellingBasis === 'gross' ? 'כולל מס' : 'לפני מס'})`,'sellingPrice',r.sellingPrice,'inputmode="decimal" placeholder="לא חובה"')}</div>` : ''}<label class="field"><span>הערות הכנה</span><textarea name="notes" rows="3" maxlength="4000">${esc(r.notes)}</textarea></label>`;
+  else body = `<div class="fields two">${field('שם '+(sub ? 'מתכון המשנה' : 'המנה'),'name',r.name,'required maxlength="120"')}${field('קטגוריה','category',r.category,'maxlength="60"')}${field(sub ? 'תפוקה סופית שימושית' : 'מספר מנות באצווה','outputQuantity',r.outputQuantity,'inputmode="decimal" required')}${sub ? `<label class="field"><span>יחידת תפוקה</span><select name="outputUnit">${options(r.outputUnit)}</select></label>` : '<div class="field-note">כל הכמויות בהמשך מתייחסות לאצווה כולה.</div>'}</div><div class="section-label"><h3>הרכב ${sub ? 'המתכון' : 'המנה'}</h3><span>${r.items.length} רכיבים</span></div><div class="editor-rows">${r.items.map(recipeItemMarkup).join('') || '<p class="hint">הוסיפי חומר גלם או מתכון משנה כדי להתחיל לחשב.</p>'}</div>${componentPickerMarkup()}${!data.ingredients.length ? '<p class="hint">כדי להתחיל, סגרי את הטופס והוסיפי חומרי גלם בלשונית המזווה.</p>' : ''}<div class="editor-preview" id="cost-preview"></div>${!sub ? `<div class="section-label"><h3>תמחור</h3></div><div class="fields two">${field('יעד Food Cost ייחודי (%)','targetOverride',r.targetOverride,`inputmode="decimal" placeholder="היעד הכללי: ${esc(data.settings.target)}%"`)}${field(`מחיר קיים לסועד (₪, ${data.settings.sellingBasis === 'gross' ? 'כולל מס' : 'לפני מס'})`,'sellingPrice',r.sellingPrice,'inputmode="decimal" placeholder="לא חובה"')}</div>` : ''}<label class="field"><span>הערות הכנה</span><textarea name="notes" rows="3" maxlength="4000">${esc(r.notes)}</textarea></label>`;
   showDialog(`${dialogHead(r.revision ? 'עריכת '+(ingredient ? 'חומר גלם' : sub ? 'מתכון משנה' : 'מנה') : 'הוספת '+(ingredient ? 'חומר גלם' : sub ? 'מתכון משנה' : 'מנה'), 'נשמר במכשיר שלך, זמין גם ללא רשת')}<form id="editor-form"><div class="dialog-body"><div class="form-error" role="alert"></div>${body}${r.revision ? `<div id="delete-feedback" class="delete-feedback" role="alert" tabindex="-1" hidden></div><div class="record-actions"><button type="button" class="text-button" data-action="archive">${icon('Archive')}${r.archivedAt ? 'הוצאה מארכיון' : 'העברה לארכיון'}</button><button type="button" class="text-button danger" data-action="delete">${icon('Trash2')}מחיקה</button></div>` : ''}</div><div class="dialog-footer"><span id="save-state">${dirty ? 'שינויים שלא נשמרו' : r.revision ? 'נשמר במכשיר' : 'פריט חדש'}</span><button type="button" class="secondary" data-action="close">ביטול</button><button type="submit" class="primary">${icon('Check')}שמירה</button></div></form>`, !ingredient);
   updatePreview();
+}
+function recipeItemMarkup(row, i) {
+  const comp = (row.type === 'ingredient' ? data.ingredients : data.recipes).find(x => x.id === row.componentId);
+  const remove = `<button type="button" class="icon-button danger" data-action="remove-row" data-index="${i}" aria-label="הסרת ${esc(comp?.name)}">${icon('X')}</button>`;
+  if (row.type === 'ingredient' && comp?.purchaseUnit === 'unit') {
+    const hasWeight = Boolean(comp.unitWeightGrams);
+    const displayRow = row.unit === 'kg' ? switchIngredientUsage(row, comp, 'g') : row;
+    const grams = displayRow.unit === 'g';
+    return `<section class="unit-usage-row" aria-label="כמות של ${esc(comp.name)}">
+      <div class="usage-row-heading"><div><strong>${esc(comp.name)}</strong><small>${hasWeight ? `יחידה אחת = ${esc(comp.unitWeightGrams)} גרם, לפני פחת` : 'חומר גלם שנרכש ביחידות'}</small></div>${remove}</div>
+      <fieldset class="usage-modes"><legend>איך להזין את הכמות?</legend>
+        <label class="usage-mode-option"><input type="radio" name="usage-mode-${i}" value="unit" data-usage-mode="${i}" ${!grams ? 'checked' : ''}><span>כמות ביחידות</span></label>
+        <label class="usage-mode-option"><input type="radio" name="usage-mode-${i}" value="g" data-usage-mode="${i}" ${grams ? 'checked' : ''} ${!hasWeight ? `disabled aria-describedby="missing-weight-${i}"` : ''}><span>גרמים מתוך יחידה</span></label>
+      </fieldset>
+      <label class="field usage-quantity"><span>${grams ? 'כמות שנלקחה בגרמים' : 'כמות ביחידות'} — ${esc(comp.name)}</span><span class="usage-input-wrap"><input name="qty-${i}" value="${esc(displayRow.quantity)}" inputmode="decimal" required><span>${grams ? 'גרם' : 'יחידות'}</span></span></label>
+      <input type="hidden" name="unit-${i}" value="${displayRow.unit}">
+      ${hasWeight ? '<p class="usage-note">העלות מחושבת לפי אופן ההזנה שנבחר ולפי הניצולת של חומר הגלם.</p>' : `<p id="missing-weight-${i}" class="usage-weight-missing">כדי להזין גרמים, יש להשלים ״משקל יחידה בגרמים״ בעריכת הפריט במסך חומרי הגלם.</p>`}
+    </section>`;
+  }
+  const unit = row.type === 'ingredient' ? comp?.purchaseUnit : comp?.outputUnit;
+  return `<div class="component-row"><div><strong>${esc(comp?.name || 'רכיב חסר')}</strong><small>${row.type === 'recipe' ? 'מתכון משנה' : 'חומר גלם'}</small></div><label><span class="sr-only">כמות ${esc(comp?.name)}</span><input name="qty-${i}" value="${esc(row.quantity)}" inputmode="decimal" required></label><select name="unit-${i}" aria-label="יחידה ${esc(comp?.name)}">${options(row.unit, row.type === 'ingredient' && comp ? ingredientRecipeUnits(comp) : Object.keys(units).filter(u => units[u].family === units[unit]?.family))}</select>${remove}</div>`;
 }
 function componentResultMarkup(matches) {
   return matches.length ? matches.map(({ type, record }) => {
@@ -308,7 +325,9 @@ const actions = {
     editor.searchQuery = '';
     dirty = true;
     drawEditor();
-    document.querySelector('#component-search').focus();
+    const nextInput = document.querySelector(type === 'ingredient' && comp.purchaseUnit === 'unit' ? `input[name="qty-${editor.record.items.length - 1}"]` : '#component-search');
+    nextInput.focus();
+    if (type === 'ingredient' && comp.purchaseUnit === 'unit') nextInput.select();
   },
   'remove-row': (_,el) => { collectEditor(); editor.record.items.splice(Number(el.dataset.index),1); dirty=true; drawEditor(); },
   duplicate: id => { const source = data.recipes.find(x=>x.id===id); newEditor(source.kind,id); editor.record.id=crypto.randomUUID(); editor.record.revision=0; editor.record.name='עותק של '+source.name; editor.record.archivedAt=null; dirty=true; drawEditor(); },
@@ -343,6 +362,7 @@ const actions = {
 };
 document.addEventListener('click',async e=>{ const button=e.target.closest('[data-action]'); if(!button) return; const action=actions[button.dataset.action]; if(!action) return; button.disabled=true; try {await action(button.dataset.id,button);} catch(error){toast(error.message || 'הפעולה נכשלה. הנתונים לא אופסו',true);} finally{button.disabled=false;} });
 document.addEventListener('input',e=>{
+  if (e.target.hasAttribute('data-usage-mode')) return;
   if(e.target.id === 'component-search' && editor) { editor.searchQuery = e.target.value; updateComponentResults(); return; }
   if(e.target.closest('#settings-form')) dirty=true;
   if(e.target.closest('#editor-form')) {dirty=true; collectEditor(); document.querySelector('#save-state').textContent='שינויים שלא נשמרו'; updatePreview();}
@@ -357,6 +377,22 @@ document.addEventListener('keydown', e => {
   }
 });
 document.addEventListener('change',async e=>{
+  if (e.target.hasAttribute('data-usage-mode') && editor) {
+    collectEditor();
+    const index = Number(e.target.dataset.usageMode);
+    const row = editor.record.items[index];
+    const ingredient = data.ingredients.find(x => x.id === row.componentId);
+    try {
+      editor.record.items[index] = switchIngredientUsage(row, ingredient, e.target.value);
+      dirty = true;
+      drawEditor();
+      document.querySelector(`input[name="qty-${index}"]`).focus({ preventScroll: true });
+    } catch (error) {
+      drawEditor();
+      toast(error.message, true);
+    }
+    return;
+  }
   if(e.target.id==='archive-filter') {showArchive=e.target.checked;render();}
   if(e.target.id==='category-filter') {category=e.target.value;render();}
   if(e.target.closest('#editor-form') && e.target.id !== 'component-search') {dirty=true;collectEditor();updatePreview();}

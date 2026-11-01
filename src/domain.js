@@ -42,6 +42,18 @@ export function ingredientRecipeUnits(ingredient) {
   if (ingredient.purchaseUnit === 'unit' && ingredient.unitWeightGrams) return ['g', 'kg', 'unit'];
   return Object.keys(units).filter(unit => units[unit].family === units[ingredient.purchaseUnit]?.family);
 }
+// Switching an input mode replaces one quantity/unit pair; it never adds a
+// second consumption amount to the recipe row.
+export function switchIngredientUsage(row, ingredient, targetUnit) {
+  if (row.type !== 'ingredient' || ingredient.purchaseUnit !== 'unit' || !['unit', 'g', 'kg'].includes(targetUnit)) throw new Error('אופן ההזנה אינו מתאים לרכיב');
+  if (targetUnit !== 'unit' && !ingredient.unitWeightGrams) throw new Error('יש להגדיר משקל ליחידה בחומר הגלם לפני שימוש בגרמים');
+  if (String(row.quantity).trim() === '') return { ...row, quantity: '', unit: targetUnit };
+  if (row.unit === targetUnit) { positive(row.quantity); return { ...row }; }
+  if (row.unit !== 'unit' && targetUnit !== 'unit') return { ...row, quantity: convert(row.quantity, row.unit, targetUnit).toString(), unit: targetUnit };
+  const count = ingredientUsageQuantity(ingredient, row.quantity, row.unit);
+  const quantity = targetUnit === 'unit' ? count : count.mul(positive(ingredient.unitWeightGrams, 'משקל יחידה')).div(units[targetUnit].factor);
+  return { ...row, quantity: quantity.toString(), unit: targetUnit };
+}
 export function validateSettings(s) {
   percent(s.target, 'יעד Food Cost'); number(s.taxRate); if (number(s.taxRate).gt(100)) throw new Error('שיעור מס לא תקין');
   positive(s.rounding, 'מדרגת עיגול'); if (!['net', 'gross'].includes(s.sellingBasis)) throw new Error('בסיס מחיר לא תקין');

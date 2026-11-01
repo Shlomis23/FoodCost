@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import 'fake-indexeddb/auto';
-import { ingredientCost, ingredientUsageQuantity, ingredientRecipeUnits, recipeCost, validateIngredient, validateRecipe, validateBackup, defaults } from '../src/domain.js';
+import { ingredientCost, ingredientUsageQuantity, ingredientRecipeUnits, switchIngredientUsage, recipeCost, validateIngredient, validateRecipe, validateBackup, defaults } from '../src/domain.js';
 import { db, saveRecord, readData, exportBackup, restoreBackup } from '../src/db.js';
 const ingredient = (extra = {}) => ({ id:'weighted', revision:0, name:'גבינה ביחידה', purchaseQuantity:'1', purchaseUnit:'unit', purchasePriceNet:'20', yieldPercent:'100', unitWeightGrams:'200', zeroConfirmed:false, ...extra });
 const recipe = (extra = {}) => ({ id:'dish', revision:0, name:'מנה', kind:'dish', outputQuantity:'1', outputUnit:'portion', items:[{type:'ingredient',componentId:'weighted',quantity:'50',unit:'g'}], ...extra });
@@ -82,5 +82,50 @@ describe('weighted-unit storage and backups', () => {
     await expect(restoreBackup(bad,1)).rejects.toThrow();
     expect((await db.ingredients.get('weighted')).unitWeightGrams).toBe('200');
     expect(()=>validateBackup({...bad,data:{...bad.data,ingredients:[ingredient({revision:1,unitWeightGrams:200})]}})).toThrow();
+  });
+});
+
+describe('switching count and gram input modes', () => {
+  const row = (extra = {}) => ({type:'ingredient',componentId:'weighted',quantity:'50',unit:'g',...extra});
+  it('converts one unit to its full weight without changing the price', () => {
+    const original=row({quantity:'1',unit:'unit'});
+    const changed=switchIngredientUsage(original,ingredient(),'g');
+    expect(changed).toEqual(row({quantity:'200',unit:'g'}));
+    expect(cost(ingredient(),recipe({items:[changed]})).perOutput.toString()).toBe('20');
+    expect(original.unit).toBe('unit');
+  });
+  it('converts a gram portion to fractional units and keeps a single consumption amount', () => {
+    const original=row();
+    const changed=switchIngredientUsage(original,ingredient(),'unit');
+    expect(changed).toEqual(row({quantity:'0.25',unit:'unit'}));
+    expect(cost(ingredient(),recipe({items:[changed]})).perOutput.toString()).toBe('5');
+    expect(original.quantity).toBe('50');
+  });
+  it('displays existing kilogram usage in grams without changing its cost', () => {
+    const changed=switchIngredientUsage(row({quantity:'0.05',unit:'kg'}),ingredient(),'g');
+    expect(changed.quantity).toBe('50');
+    expect(cost(ingredient(),recipe({items:[changed]})).perOutput.toString()).toBe('5');
+  });
+  it('does not apply yield again when switching modes', () => {
+    const i=ingredient({yieldPercent:'80'});
+    const changed=switchIngredientUsage(row(),i,'unit');
+    const back=switchIngredientUsage(changed,i,'g');
+    expect(back.quantity).toBe('50');
+    expect(cost(i,recipe({items:[changed]})).perOutput.toString()).toBe('6.25');
+    expect(cost(i,recipe({items:[back]})).perOutput.toString()).toBe('6.25');
+  });
+  it('allows switching an empty quantity so it can be entered in the new mode', () => {
+    expect(switchIngredientUsage(row({quantity:'',unit:'unit'}),ingredient(),'g')).toEqual(row({quantity:'',unit:'g'}));
+  });
+  it('blocks grams without a configured unit weight', () => {
+    expect(()=>switchIngredientUsage(row({unit:'unit'}),ingredient({unitWeightGrams:''}),'g')).toThrow(/משקל ליחידה/);
+  });
+  it('rejects invalid quantities and unsupported usage modes', () => {
+    expect(()=>switchIngredientUsage(row({quantity:'abc'}),ingredient(),'unit')).toThrow();
+    expect(()=>switchIngredientUsage(row(),ingredient(),'ml')).toThrow();
+  });
+  it('leaves a quantity untouched when its mode is selected again', () => {
+    const original=row({quantity:'50.25'});
+    expect(switchIngredientUsage(original,ingredient(),'g')).toEqual(original);
   });
 });
